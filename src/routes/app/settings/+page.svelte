@@ -68,68 +68,86 @@
   onMount(loadProfile);
 </script>
 
-<div class="max-w-3xl mx-auto">
-  <div class="mb-8">
-    <h2 class="text-3xl font-bold text-gray-800">Configuración</h2>
-    <p class="text-gray-500">Personaliza los datos que aparecerán en tus facturas.</p>
+<div class="space-y-8">
+  <div>
+    <h2 class="text-3xl font-semibold text-slate-900">Configuración</h2>
+    <p class="text-sm text-slate-500">Estos datos se mostrarán en tus facturas oficiales.</p>
   </div>
 
   {#if loading}
-    <div class="text-gray-400">Cargando configuración...</div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-8 text-slate-400">
+      Cargando configuración...
+    </div>
   {:else}
-    <form class="bg-white rounded-xl shadow-sm border border-gray-100 p-8 space-y-6" onsubmit={(event) => { event.preventDefault(); saveProfile(); }}>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Nombre del negocio</label>
-        <input
-          type="text"
-          bind:value={profile.business_name}
-          placeholder="Tu empresa o nombre fiscal"
-          class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-        />
-      </div>
+    <div class="grid gap-6 lg:grid-cols-[2fr_1fr]">
+      <form class="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm space-y-6" onsubmit={(event) => { event.preventDefault(); saveProfile(); }}>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">Nombre del negocio</label>
+          <input
+            type="text"
+            bind:value={profile.business_name}
+            placeholder="Tu empresa o nombre fiscal"
+            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition"
+          />
+        </div>
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">NIF/CIF</label>
-        <input
-          type="text"
-          bind:value={profile.tax_id}
-          placeholder="B12345678"
-          class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-        />
-      </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">NIF/CIF</label>
+          <input
+            type="text"
+            bind:value={profile.tax_id}
+            placeholder="B12345678"
+            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition"
+          />
+        </div>
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Dirección fiscal</label>
-        <textarea
-          rows="3"
-          bind:value={profile.address}
-          placeholder="Calle, número, ciudad, país"
-          class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-        ></textarea>
-      </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">Dirección fiscal</label>
+          <textarea
+            rows="4"
+            bind:value={profile.address}
+            placeholder="Calle, número, ciudad, país"
+            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition"
+          ></textarea>
+        </div>
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Logo (URL)</label>
-        <input
-          type="url"
-          bind:value={profile.logo_url}
-          placeholder="https://"
-          class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-        />
-      </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">Logo (URL)</label>
+          <input
+            type="url"
+            bind:value={profile.logo_url}
+            placeholder="https://"
+            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition"
+          />
+        </div>
 
-      <div class="flex items-center gap-4">
-        <button
-          type="submit"
-          disabled={saving}
-          class="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {saving ? 'Guardando...' : 'Guardar cambios'}
-        </button>
-        {#if message}
-          <span class="text-sm text-gray-500">{message}</span>
-        {/if}
+        <div class="flex flex-wrap items-center gap-4">
+          <button
+            type="submit"
+            disabled={saving}
+            class="rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            {saving ? 'Guardando...' : 'Guardar cambios'}
+          </button>
+          {#if message}
+            <span class="text-xs text-slate-500">{message}</span>
+          {/if}
+        </div>
+      </form>
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <p class="text-xs uppercase tracking-wide text-slate-400">Vista previa</p>
+        <div class="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+          {#if profile.logo_url}
+            <img src={profile.logo_url} alt="Logo" class="h-10 w-auto object-contain mb-3" />
+          {:else}
+            <div class="h-10 w-24 rounded-lg bg-slate-200 mb-3"></div>
+          {/if}
+          <p class="text-sm font-semibold text-slate-900">{profile.business_name || 'Tu empresa'}</p>
+          <p class="text-xs text-slate-500">{profile.tax_id || 'NIF/CIF'}</p>
+          <p class="mt-2 text-xs text-slate-500 whitespace-pre-line">{profile.address || 'Dirección fiscal'}</p>
+        </div>
       </div>
-    </form>
+    </div>
   {/if}
 </div>

@@ -145,37 +145,38 @@
   }
 </script>
 
-<div class="max-w-5xl mx-auto p-6">
-  <div class="flex justify-between items-center mb-8 bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm">
-    <h1 class="text-xl font-bold text-gray-700">Panel de Control</h1>
-    
-    <div class="flex gap-3">
-      <button 
+<div class="space-y-6">
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <h1 class="text-3xl font-semibold text-slate-900">Editor de factura</h1>
+      <p class="text-sm text-slate-500">Crea una factura clara y lista para enviar.</p>
+    </div>
+    <div class="flex flex-wrap gap-3">
+      <button
         onclick={downloadPDF}
-        class="bg-gray-800 text-white px-5 py-2 rounded-lg font-bold hover:bg-black transition-all flex items-center gap-2"
+        class="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:text-slate-900 transition"
       >
-        <span>📄</span> Descargar PDF
+        📄 Descargar PDF
       </button>
 
-      <button 
+      <button
         onclick={saveInvoice}
         disabled={saving || !user}
-        class="bg-blue-600 text-white px-5 py-2 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center gap-2"
+        class="rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition"
       >
-        {saving ? '...' : '💾'} {saving ? 'Guardando' : (isEditing ? 'Actualizar factura' : 'Guardar en Nube')}
+        {saving ? 'Guardando...' : (isEditing ? 'Actualizar factura' : 'Guardar en nube')}
       </button>
     </div>
   </div>
 
-  <div id="invoice-canvas" class="bg-white rounded-sm shadow-2xl border border-gray-200 p-12 min-h-[1050px] w-[800px] mx-auto overflow-hidden">
-    
-    <div class="flex justify-between items-start mb-16">
+  <div id="invoice-canvas" class="mx-auto w-[800px] max-w-full rounded-3xl border border-slate-200 bg-white p-12 shadow-xl">
+    <div class="flex flex-wrap items-start justify-between gap-6">
       <div>
-        <h2 class="text-5xl font-black text-gray-900 tracking-tighter mb-2">FACTURA</h2>
-        <p class="text-gray-400 font-mono italic"># INV-{Math.floor(Math.random() * 1000)}</p>
-        <div class="mt-6 text-sm text-gray-500 space-y-1 max-w-xs">
+        <p class="text-xs uppercase tracking-[0.3em] text-slate-400">Factura</p>
+        <h2 class="mt-2 text-4xl font-semibold text-slate-900">INV-{Math.floor(Math.random() * 1000)}</h2>
+        <div class="mt-6 space-y-1 text-sm text-slate-500">
           {#if profile.business_name}
-            <div class="text-gray-700 font-semibold">{profile.business_name}</div>
+            <div class="text-slate-900 font-semibold">{profile.business_name}</div>
           {/if}
           {#if profile.tax_id}
             <div>NIF/CIF: {profile.tax_id}</div>
@@ -187,81 +188,89 @@
       </div>
       <div class="text-right">
         {#if profile.logo_url}
-          <img src={profile.logo_url} alt="Logo" class="h-16 w-auto object-contain ml-auto mb-2" />
+          <img src={profile.logo_url} alt="Logo" class="h-14 w-auto object-contain ml-auto mb-2" />
         {:else}
-          <div class="bg-blue-600 text-white p-4 font-bold rounded-lg inline-block mb-2">LOGO</div>
+          <div class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white">
+            LOGO
+          </div>
         {/if}
-        <p class="text-sm text-gray-400 uppercase tracking-widest">Original Document</p>
+        <p class="mt-2 text-xs uppercase tracking-[0.3em] text-slate-400">Documento oficial</p>
       </div>
     </div>
 
-    <div class="mb-12">
-      <label class="block text-xs font-bold text-blue-600 uppercase mb-2 tracking-widest">Información del Cliente</label>
-      <input 
-        type="text" 
-        bind:value={clientName} 
-        placeholder="Nombre del Cliente o Empresa"
-        class="w-full text-3xl font-bold border-b-2 border-gray-100 focus:border-blue-500 outline-none pb-2 transition-all"
+    <div class="mt-10">
+      <label class="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 mb-3">Cliente</label>
+      <input
+        type="text"
+        bind:value={clientName}
+        placeholder="Nombre del cliente o empresa"
+        class="w-full border-b border-slate-200 pb-3 text-2xl font-semibold text-slate-900 outline-none focus:border-blue-500 transition"
       />
     </div>
 
-    <div class="mb-10">
-      <div class="grid grid-cols-12 gap-4 mb-4 text-xs font-bold text-gray-400 uppercase px-2 border-b pb-2">
-        <div class="col-span-6">Descripción del Servicio</div>
+    <div class="mt-10">
+      <div class="grid grid-cols-12 gap-4 border-b border-slate-100 pb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+        <div class="col-span-6">Concepto</div>
         <div class="col-span-2 text-right">Cant.</div>
         <div class="col-span-2 text-right">Precio</div>
         <div class="col-span-2 text-right">Total</div>
       </div>
 
       {#each items as item, i}
-        <div class="grid grid-cols-12 gap-4 items-center mb-1 group border-b border-gray-50 p-2 hover:bg-blue-50/30 transition-colors">
+        <div class="grid grid-cols-12 items-center gap-4 border-b border-slate-50 py-3 hover:bg-slate-50/60 transition">
           <div class="col-span-6">
-            <input type="text" bind:value={item.desc} placeholder="Ej. Diseño de Interfaz" class="w-full bg-transparent outline-none font-medium text-gray-700" />
+            <input
+              type="text"
+              bind:value={item.desc}
+              placeholder="Ej. Consultoría mensual"
+              class="w-full bg-transparent text-sm font-medium text-slate-700 outline-none"
+            />
           </div>
           <div class="col-span-2 text-right">
-            <input type="number" bind:value={item.qty} class="w-full text-right bg-transparent outline-none" />
+            <input type="number" bind:value={item.qty} class="w-full bg-transparent text-right text-sm text-slate-700 outline-none" />
           </div>
           <div class="col-span-2 text-right">
-            <input type="number" bind:value={item.price} class="w-full text-right bg-transparent outline-none" />
+            <input type="number" bind:value={item.price} class="w-full bg-transparent text-right text-sm text-slate-700 outline-none" />
           </div>
-          <div class="col-span-1 text-right font-bold text-gray-900">
+          <div class="col-span-1 text-right text-sm font-semibold text-slate-900">
             {(item.price * item.qty).toFixed(2)}€
           </div>
           <div class="col-span-1 text-right">
-            <button onclick={() => removeItem(i)} class="text-gray-200 hover:text-red-500 transition-colors">✕</button>
+            <button onclick={() => removeItem(i)} class="text-slate-300 hover:text-red-500 transition">✕</button>
           </div>
         </div>
       {/each}
-      
-      <button onclick={addItem} class="mt-6 text-blue-600 font-bold text-sm flex items-center gap-1 hover:text-blue-800 transition-all">
-        <span class="text-lg">+</span> Añadir concepto
+
+      <button onclick={addItem} class="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700">
+        + Añadir concepto
       </button>
     </div>
 
-    <div class="flex justify-end pt-10 mt-20 border-t-4 border-gray-900">
-      <div class="w-72 space-y-4">
-        <div class="flex justify-between text-gray-500 font-medium">
+    <div class="mt-12 flex justify-end border-t border-slate-200 pt-8">
+      <div class="w-72 space-y-4 text-sm">
+        <div class="flex justify-between text-slate-500">
           <span>Subtotal</span>
-          <span>{subtotal().toFixed(2)} €</span>
+          <span class="font-medium text-slate-900">{subtotal().toFixed(2)} €</span>
         </div>
-        <div class="flex justify-between text-gray-500 items-center">
-          <span>Impuestos (IVA {taxRate}%)</span>
-          <div class="flex items-center gap-1">
-            <input type="number" bind:value={taxRate} class="w-10 text-right border-b border-gray-200 outline-none text-sm" />%
+        <div class="flex justify-between items-center text-slate-500">
+          <span>IVA ({taxRate}%)</span>
+          <div class="flex items-center gap-2">
+            <input type="number" bind:value={taxRate} class="w-12 border-b border-slate-200 text-right text-sm outline-none" />
+            <span>%</span>
           </div>
         </div>
-        <div class="flex justify-between text-3xl font-black text-gray-900 pt-4">
-          <span>TOTAL</span>
+        <div class="flex justify-between text-xl font-semibold text-slate-900 pt-3">
+          <span>Total</span>
           <span class="text-blue-600">{total().toFixed(2)} €</span>
         </div>
       </div>
     </div>
 
-    <div class="mt-32 text-xs text-gray-300 border-t pt-4 italic">
-      Gracias por su confianza. Este documento es una factura válida generada mediante FacturasGen SaaS.
+    <div class="mt-14 border-t border-slate-100 pt-4 text-xs text-slate-400">
+      Gracias por su confianza. Este documento es una factura válida generada mediante FacturasGen.
     </div>
     {#if showWatermark}
-      <div class="mt-6 text-[10px] text-gray-300 text-center uppercase tracking-[0.3em]">
+      <div class="mt-4 text-[10px] text-slate-300 text-center uppercase tracking-[0.3em]">
         Generado con FacturasGen
       </div>
     {/if}

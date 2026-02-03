@@ -7,6 +7,12 @@
   let loading = $state(true);
   let errorMessage = $state('');
 
+  const totalRevenue = () =>
+    invoices.reduce((sum, invoice) => sum + calculateTotal(invoice), 0);
+
+  const draftCount = () =>
+    invoices.filter((invoice) => (invoice.status ?? 'draft') === 'draft').length;
+
   const formatDate = (value) => {
     if (!value) return '-';
     const date = new Date(value);
@@ -41,63 +47,83 @@
   });
 </script>
 
-<div class="max-w-4xl mx-auto">
-  <div class="flex justify-between items-center mb-8">
+<div class="space-y-8">
+  <div class="flex flex-wrap items-center justify-between gap-4">
     <div>
-      <h2 class="text-3xl font-bold text-gray-800">Mis Facturas</h2>
-      <p class="text-gray-500">Gestiona tus ingresos desde aquí.</p>
+      <h2 class="text-3xl font-semibold text-slate-900">Dashboard</h2>
+      <p class="text-sm text-slate-500">Resumen operativo de tu facturación.</p>
     </div>
-    <a href="/app/editor" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 shadow-md font-medium flex items-center gap-2">
-      + Nueva Factura
+    <a href="/app/editor" class="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
+      + Nueva factura
     </a>
   </div>
 
+  <div class="grid gap-4 md:grid-cols-3">
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p class="text-xs text-slate-400">Facturas emitidas</p>
+      <p class="mt-2 text-2xl font-semibold text-slate-900">{invoices.length}</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p class="text-xs text-slate-400">Facturas en borrador</p>
+      <p class="mt-2 text-2xl font-semibold text-slate-900">{draftCount()}</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p class="text-xs text-slate-400">Ingresos estimados</p>
+      <p class="mt-2 text-2xl font-semibold text-blue-600">{totalRevenue().toFixed(2)} €</p>
+    </div>
+  </div>
+
   {#if loading}
-    <div class="text-center py-12 text-gray-400">Cargando facturas...</div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-10 text-center text-slate-400">
+      Cargando facturas...
+    </div>
   {:else if errorMessage}
-    <div class="bg-red-50 border border-red-100 text-red-600 p-6 rounded-xl text-center">
+    <div class="rounded-2xl border border-red-100 bg-red-50 p-6 text-sm text-red-600">
       {errorMessage}
     </div>
   {:else if invoices.length === 0}
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
-      <div class="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
-        📄
-      </div>
-      <h3 class="text-lg font-medium text-gray-900 mb-2">Aún no tienes facturas</h3>
-      <p class="text-gray-500 mb-6 max-w-sm mx-auto">Crea tu primera factura profesional en menos de 2 minutos y envíala a tu cliente.</p>
-
-      <a href="/app/editor" class="text-blue-600 font-medium hover:underline">
-        Empezar ahora &rarr;
+    <div class="rounded-2xl border border-slate-200 bg-white p-10 text-center">
+      <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-xl">📄</div>
+      <h3 class="text-lg font-semibold text-slate-900">Aún no tienes facturas</h3>
+      <p class="mt-2 text-sm text-slate-500">Crea la primera factura para empezar a registrar ingresos.</p>
+      <a href="/app/editor" class="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700">
+        Empezar ahora →
       </a>
     </div>
   {:else}
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <table class="w-full text-left">
-        <thead class="bg-gray-50 text-gray-500 text-sm uppercase">
-          <tr>
-            <th class="px-6 py-4">Nº</th>
-            <th class="px-6 py-4">Cliente</th>
-            <th class="px-6 py-4">Fecha</th>
-            <th class="px-6 py-4 text-right">Total</th>
-            <th class="px-6 py-4 text-center">Estado</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-100">
-          {#each invoices as invoice}
-            <tr class="hover:bg-gray-50 transition-colors cursor-pointer" onclick={() => goto(`/app/editor?id=${invoice.id}`)}>
-              <td class="px-6 py-4 font-medium text-gray-900">{invoice.number ?? '-'}</td>
-              <td class="px-6 py-4 text-gray-600">{invoice.client_name || 'Sin nombre'}</td>
-              <td class="px-6 py-4 text-gray-500">{formatDate(invoice.created_at)}</td>
-              <td class="px-6 py-4 text-right font-bold text-gray-900">{calculateTotal(invoice).toFixed(2)} €</td>
-              <td class="px-6 py-4 text-center">
-                <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                  {invoice.status ?? 'draft'}
-                </span>
-              </td>
+    <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div class="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+        <h3 class="text-sm font-semibold text-slate-700">Últimas facturas</h3>
+        <span class="text-xs text-slate-400">Actualizado hoy</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-slate-50 text-xs uppercase text-slate-500">
+            <tr>
+              <th class="px-6 py-4">Nº</th>
+              <th class="px-6 py-4">Cliente</th>
+              <th class="px-6 py-4">Fecha</th>
+              <th class="px-6 py-4 text-right">Total</th>
+              <th class="px-6 py-4 text-center">Estado</th>
             </tr>
-          {/each}
-        </tbody>
-      </table>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {#each invoices as invoice}
+              <tr class="cursor-pointer hover:bg-slate-50 transition" onclick={() => goto(`/app/editor?id=${invoice.id}`)}>
+                <td class="px-6 py-4 font-semibold text-slate-800">{invoice.number ?? '-'}</td>
+                <td class="px-6 py-4 text-slate-600">{invoice.client_name || 'Sin nombre'}</td>
+                <td class="px-6 py-4 text-slate-500">{formatDate(invoice.created_at)}</td>
+                <td class="px-6 py-4 text-right font-semibold text-slate-900">{calculateTotal(invoice).toFixed(2)} €</td>
+                <td class="px-6 py-4 text-center">
+                  <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                    {invoice.status ?? 'draft'}
+                  </span>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
     </div>
   {/if}
 </div>

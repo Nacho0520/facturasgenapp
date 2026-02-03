@@ -1,10 +1,114 @@
-<div class="min-h-screen flex flex-col items-center justify-center bg-gray-50">
-  <h1 class="text-5xl font-bold text-blue-600 mb-4">FacturasGen</h1>
-  <p class="text-xl text-gray-600 mb-8">Crea facturas profesionales en segundos.</p>
-  
-  <div class="space-x-4">
-    <a href="/login" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-      Empezar ahora
-    </a>
-  </div>
+<div class="min-h-screen bg-slate-50">
+  <header class="border-b border-slate-200 bg-white/70 backdrop-blur">
+    <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+      <div class="flex items-center gap-2 text-slate-900">
+        <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white font-semibold">F</div>
+        <span class="text-lg font-semibold">FacturasGen</span>
+      </div>
+      <div class="flex items-center gap-3 text-sm">
+        <a href="/login" class="text-slate-600 hover:text-slate-900">Acceder</a>
+        <a href="/login" class="rounded-full bg-blue-600 px-4 py-2 text-white font-medium hover:bg-blue-700">
+          Crear cuenta
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-6xl px-6 py-16">
+    <div class="grid items-center gap-12 lg:grid-cols-2">
+      <div>
+        <p class="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+          Herramienta profesional para empresas
+        </p>
+        <h1 class="mt-6 text-4xl font-semibold text-slate-900 sm:text-5xl">
+          Facturación moderna, clara y lista para enviar en minutos.
+        </h1>
+        <p class="mt-4 text-lg text-slate-600">
+          Crea facturas con identidad corporativa, guarda tus clientes y controla tu historial con
+          una experiencia simple y confiable.
+        </p>
+        <div class="mt-8 flex flex-wrap items-center gap-4">
+          <a href="/login" class="rounded-full bg-blue-600 px-6 py-3 text-white font-semibold hover:bg-blue-700">
+            Empezar gratis
+          </a>
+          <a href="/login" class="rounded-full border border-slate-200 px-6 py-3 text-slate-700 font-semibold hover:border-slate-300">
+            Ver demo
+          </a>
+        </div>
+        <div class="mt-8 flex items-center gap-6 text-sm text-slate-500">
+          <div class="flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+            Datos seguros en Supabase
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-blue-500"></span>
+            PDF listo para enviar
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
+        <div class="rounded-2xl border border-slate-100 bg-slate-50 p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs text-slate-400">Factura</p>
+              <h3 class="text-xl font-semibold text-slate-900">INV-2045</h3>
+            </div>
+            <div class="text-right">
+              <p class="text-xs text-slate-400">Total</p>
+              <p class="text-2xl font-semibold text-blue-600">1.250 €</p>
+            </div>
+          </div>
+          <div class="mt-6 space-y-3">
+            <div class="flex items-center justify-between text-sm text-slate-600">
+              <span>Consultoría estratégica</span>
+              <span>750 €</span>
+            </div>
+            <div class="flex items-center justify-between text-sm text-slate-600">
+              <span>Implementación</span>
+              <span>500 €</span>
+            </div>
+            <div class="border-t border-slate-200 pt-3 text-sm text-slate-500">
+              Factura aprobada · Lista para enviar
+            </div>
+          </div>
+        </div>
+        <div class="mt-6 grid gap-4 sm:grid-cols-3 text-sm text-slate-600">
+          <div class="rounded-2xl border border-slate-100 bg-white p-4">
+            <p class="text-xs text-slate-400">Clientes</p>
+            <p class="text-lg font-semibold text-slate-900">24</p>
+          </div>
+          <div class="rounded-2xl border border-slate-100 bg-white p-4">
+            <p class="text-xs text-slate-400">Facturas</p>
+            <p class="text-lg font-semibold text-slate-900">128</p>
+          </div>
+          <div class="rounded-2xl border border-slate-100 bg-white p-4">
+            <p class="text-xs text-slate-400">Cobrado</p>
+            <p class="text-lg font-semibold text-slate-900">18,4k €</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <section class="mt-20 grid gap-6 md:grid-cols-3">
+      <div class="rounded-2xl border border-slate-200 bg-white p-6">
+        <h3 class="text-lg font-semibold text-slate-900">Marca consistente</h3>
+        <p class="mt-2 text-sm text-slate-600">
+          Logo, datos fiscales y diseño alineados con tu identidad corporativa.
+        </p>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-6">
+        <h3 class="text-lg font-semibold text-slate-900">Control de historial</h3>
+        <p class="mt-2 text-sm text-slate-600">
+          Acceso instantáneo a facturas y estados desde cualquier dispositivo.
+        </p>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-6">
+        <h3 class="text-lg font-semibold text-slate-900">PDF profesional</h3>
+        <p class="mt-2 text-sm text-slate-600">
+          Exporta en segundos con un formato listo para enviar al cliente.
+        </p>
+      </div>
+    </section>
+  </main>
 </div>
