@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { supabase } from '$lib/supabase';
 
   let invoices = $state([]);
@@ -83,7 +84,7 @@
         </thead>
         <tbody class="divide-y divide-gray-100">
           {#each invoices as invoice}
-            <tr class="hover:bg-gray-50 transition-colors">
+            <tr class="hover:bg-gray-50 transition-colors cursor-pointer" onclick={() => goto(`/app/editor?id=${invoice.id}`)}>
               <td class="px-6 py-4 font-medium text-gray-900">{invoice.number ?? '-'}</td>
               <td class="px-6 py-4 text-gray-600">{invoice.client_name || 'Sin nombre'}</td>
               <td class="px-6 py-4 text-gray-500">{formatDate(invoice.created_at)}</td>

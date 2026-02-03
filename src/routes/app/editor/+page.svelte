@@ -1,12 +1,16 @@
 <script>
   import { supabase } from '$lib/supabase';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import html2pdf from 'html2pdf.js'; // Asegúrate de haber hecho: npm install html2pdf.js
+  import { get } from 'svelte/store';
 
   // --- ESTADOS (Svelte 5) ---
   let clientName = $state("");
   let taxRate = $state(21);
+  let invoiceId = $state(null);
+  let isEditing = $state(false);
   let profile = $state({
     business_name: "",
     tax_id: "",
@@ -49,6 +53,14 @@
     if (typeof localStorage !== 'undefined') {
       showWatermark = localStorage.getItem('facturasgen_pro') !== 'true';
     }
+
+    const { url } = get(page);
+    const id = url.searchParams.get('id');
+    if (id) {
+      invoiceId = id;
+      isEditing = true;
+      await loadInvoice(id);
+    }
   });
 
   // --- FUNCIONES DE LA TABLA ---
@@ -84,22 +96,52 @@
       
       if (!currentUser) throw new Error("Sesión expirada. Inicia sesión de nuevo.");
 
-      const { error } = await supabase.from('invoices').insert({
+      const payload = {
         user_id: currentUser.id,
         client_name: clientName,
         line_items: items,
         tax_rate: taxRate,
         status: 'sent'
-      });
+      };
+
+      const { error } = isEditing
+        ? await supabase
+            .from('invoices')
+            .update(payload)
+            .eq('id', invoiceId)
+            .eq('user_id', currentUser.id)
+        : await supabase.from('invoices').insert(payload);
 
       if (error) throw error;
-      alert("¡Factura guardada correctamente!");
+      alert(isEditing ? "¡Factura actualizada correctamente!" : "¡Factura guardada correctamente!");
       goto('/app/dashboard');
     } catch (err) {
       alert("Error: " + err.message);
     } finally {
       saving = false;
     }
+  }
+
+  async function loadInvoice(id) {
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) return;
+
+    const { data, error } = await supabase
+      .from('invoices')
+      .select('client_name, line_items, tax_rate')
+      .eq('id', id)
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+
+    if (error || !data) {
+      alert("No se pudo cargar la factura");
+      goto('/app/dashboard');
+      return;
+    }
+
+    clientName = data.client_name ?? '';
+    items = Array.isArray(data.line_items) && data.line_items.length > 0 ? data.line_items : [{ desc: "", price: 0, qty: 1 }];
+    taxRate = data.tax_rate ?? 21;
   }
 </script>
 
@@ -120,7 +162,7 @@
         disabled={saving || !user}
         class="bg-blue-600 text-white px-5 py-2 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center gap-2"
       >
-        {saving ? '...' : '💾'} {saving ? 'Guardando' : 'Guardar en Nube'}
+        {saving ? '...' : '💾'} {saving ? 'Guardando' : (isEditing ? 'Actualizar factura' : 'Guardar en Nube')}
       </button>
     </div>
   </div>
