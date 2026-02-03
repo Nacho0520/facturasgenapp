@@ -7,6 +7,13 @@
   // --- ESTADOS (Svelte 5) ---
   let clientName = $state("");
   let taxRate = $state(21);
+  let profile = $state({
+    business_name: "",
+    tax_id: "",
+    address: "",
+    logo_url: ""
+  });
+  let showWatermark = $state(true);
   let items = $state([
     { desc: "", price: 0, qty: 1 }
   ]);
@@ -21,6 +28,27 @@
   onMount(async () => {
     const { data } = await supabase.auth.getUser();
     user = data.user;
+
+    if (user) {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('business_name, tax_id, address, logo_url')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (profileData) {
+        profile = {
+          business_name: profileData.business_name ?? "",
+          tax_id: profileData.tax_id ?? "",
+          address: profileData.address ?? "",
+          logo_url: profileData.logo_url ?? ""
+        };
+      }
+    }
+
+    if (typeof localStorage !== 'undefined') {
+      showWatermark = localStorage.getItem('facturasgen_pro') !== 'true';
+    }
   });
 
   // --- FUNCIONES DE LA TABLA ---
@@ -103,9 +131,24 @@
       <div>
         <h2 class="text-5xl font-black text-gray-900 tracking-tighter mb-2">FACTURA</h2>
         <p class="text-gray-400 font-mono italic"># INV-{Math.floor(Math.random() * 1000)}</p>
+        <div class="mt-6 text-sm text-gray-500 space-y-1 max-w-xs">
+          {#if profile.business_name}
+            <div class="text-gray-700 font-semibold">{profile.business_name}</div>
+          {/if}
+          {#if profile.tax_id}
+            <div>NIF/CIF: {profile.tax_id}</div>
+          {/if}
+          {#if profile.address}
+            <div class="whitespace-pre-line">{profile.address}</div>
+          {/if}
+        </div>
       </div>
       <div class="text-right">
-        <div class="bg-blue-600 text-white p-4 font-bold rounded-lg inline-block mb-2">LOGO</div>
+        {#if profile.logo_url}
+          <img src={profile.logo_url} alt="Logo" class="h-16 w-auto object-contain ml-auto mb-2" />
+        {:else}
+          <div class="bg-blue-600 text-white p-4 font-bold rounded-lg inline-block mb-2">LOGO</div>
+        {/if}
         <p class="text-sm text-gray-400 uppercase tracking-widest">Original Document</p>
       </div>
     </div>
@@ -175,6 +218,11 @@
     <div class="mt-32 text-xs text-gray-300 border-t pt-4 italic">
       Gracias por su confianza. Este documento es una factura válida generada mediante FacturasGen SaaS.
     </div>
+    {#if showWatermark}
+      <div class="mt-6 text-[10px] text-gray-300 text-center uppercase tracking-[0.3em]">
+        Generado con FacturasGen
+      </div>
+    {/if}
   </div>
 </div>
 
