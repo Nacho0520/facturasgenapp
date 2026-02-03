@@ -11,6 +11,9 @@
   let taxRate = $state(21);
   let invoiceId = $state(null);
   let isEditing = $state(false);
+  let template = $state('classic');
+  let coverImageUrl = $state('');
+  let isPro = $state(false);
   let profile = $state({
     business_name: "",
     tax_id: "",
@@ -19,8 +22,9 @@
   });
   let showWatermark = $state(true);
   let items = $state([
-    { desc: "", price: 0, qty: 1 }
+    { desc: "", price: 0, qty: 1, imageUrl: "" }
   ]);
+  let sectionOrder = $state(['header', 'client', 'items', 'totals', 'footer']);
   
   let saving = $state(false);
   let user = $state(null);
@@ -28,6 +32,22 @@
   // --- CÁLCULOS REACTIVOS ---
   const subtotal = () => items.reduce((sum, item) => sum + (item.price * item.qty), 0);
   const total = () => subtotal() + (subtotal() * (taxRate / 100));
+
+  const templates = [
+    { id: 'classic', name: 'Clásica', proOnly: false },
+    { id: 'modern', name: 'Moderna', proOnly: false },
+    { id: 'minimal', name: 'Minimal', proOnly: false },
+    { id: 'signature', name: 'Signature', proOnly: true },
+    { id: 'executive', name: 'Executive', proOnly: true }
+  ];
+
+  const templateClass = () => {
+    if (template === 'modern') return 'border-blue-100';
+    if (template === 'minimal') return 'border-slate-100';
+    if (template === 'signature') return 'border-emerald-100';
+    if (template === 'executive') return 'border-violet-100';
+    return 'border-slate-200';
+  };
 
   onMount(async () => {
     const { data } = await supabase.auth.getUser();
@@ -51,7 +71,8 @@
     }
 
     if (typeof localStorage !== 'undefined') {
-      showWatermark = localStorage.getItem('facturasgen_pro') !== 'true';
+      isPro = localStorage.getItem('facturasgen_pro') === 'true';
+      showWatermark = !isPro;
     }
 
     const { url } = get(page);
@@ -101,7 +122,10 @@
         client_name: clientName,
         line_items: items,
         tax_rate: taxRate,
-        status: 'sent'
+        status: 'sent',
+        template,
+        cover_image_url: coverImageUrl,
+        section_order: sectionOrder
       };
 
       const { error } = isEditing
@@ -128,7 +152,7 @@
 
     const { data, error } = await supabase
       .from('invoices')
-      .select('client_name, line_items, tax_rate')
+      .select('client_name, line_items, tax_rate, template, cover_image_url, section_order')
       .eq('id', id)
       .eq('user_id', currentUser.id)
       .maybeSingle();
@@ -140,8 +164,34 @@
     }
 
     clientName = data.client_name ?? '';
-    items = Array.isArray(data.line_items) && data.line_items.length > 0 ? data.line_items : [{ desc: "", price: 0, qty: 1 }];
+    items = Array.isArray(data.line_items) && data.line_items.length > 0
+      ? data.line_items.map((item) => ({ ...item, imageUrl: item.imageUrl ?? "" }))
+      : [{ desc: "", price: 0, qty: 1, imageUrl: "" }];
     taxRate = data.tax_rate ?? 21;
+    template = data.template ?? 'classic';
+    coverImageUrl = data.cover_image_url ?? '';
+    sectionOrder = Array.isArray(data.section_order) && data.section_order.length > 0
+      ? data.section_order
+      : ['header', 'client', 'items', 'totals', 'footer'];
+  }
+
+  function handleTemplateChange(value) {
+    const selected = templates.find((item) => item.id === value);
+    if (selected?.proOnly && !isPro) {
+      template = 'classic';
+      alert('Esta plantilla es Pro. Actualiza tu plan para acceder.');
+      return;
+    }
+    template = value;
+  }
+
+  function moveSection(index, direction) {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= sectionOrder.length) return;
+    const updated = [...sectionOrder];
+    const [current] = updated.splice(index, 1);
+    updated.splice(nextIndex, 0, current);
+    sectionOrder = updated;
   }
 </script>
 
@@ -149,14 +199,16 @@
   <div class="flex flex-wrap items-center justify-between gap-4">
     <div>
       <h1 class="text-3xl font-semibold text-slate-900">Editor de factura</h1>
-      <p class="text-sm text-slate-500">Crea una factura clara y lista para enviar.</p>
+      <p class="text-sm text-slate-500">
+        {isEditing ? 'Estás editando una factura guardada.' : 'Crea una factura clara y lista para enviar.'}
+      </p>
     </div>
     <div class="flex flex-wrap gap-3">
       <button
         onclick={downloadPDF}
         class="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:text-slate-900 transition"
       >
-        📄 Descargar PDF
+        Descargar PDF
       </button>
 
       <button
@@ -169,111 +221,221 @@
     </div>
   </div>
 
-  <div id="invoice-canvas" class="mx-auto w-[800px] max-w-full rounded-3xl border border-slate-200 bg-white p-12 shadow-xl">
-    <div class="flex flex-wrap items-start justify-between gap-6">
+  <div class="grid gap-6 lg:grid-cols-[320px_1fr]">
+    <aside class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
       <div>
-        <p class="text-xs uppercase tracking-[0.3em] text-slate-400">Factura</p>
-        <h2 class="mt-2 text-4xl font-semibold text-slate-900">INV-{Math.floor(Math.random() * 1000)}</h2>
-        <div class="mt-6 space-y-1 text-sm text-slate-500">
-          {#if profile.business_name}
-            <div class="text-slate-900 font-semibold">{profile.business_name}</div>
+        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Plantilla</p>
+        <select
+          value={template}
+          onchange={(event) => handleTemplateChange(event.currentTarget.value)}
+          class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+        >
+          {#each templates as option}
+            <option value={option.id}>
+              {option.name}{option.proOnly ? ' (Pro)' : ''}
+            </option>
+          {/each}
+        </select>
+        <p class="mt-2 text-xs text-slate-400">Las plantillas Pro desbloquean estilos premium.</p>
+      </div>
+
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Imagen de portada</p>
+        <input
+          type="url"
+          bind:value={coverImageUrl}
+          placeholder="https://"
+          class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+        />
+        <p class="mt-2 text-xs text-slate-400">Se mostrará en la parte superior de la factura.</p>
+      </div>
+
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Orden de secciones</p>
+        <div class="mt-3 space-y-2">
+          {#each sectionOrder as section, index}
+            <div class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <span class="font-semibold text-slate-700">
+                {section === 'header' ? 'Encabezado' : ''}
+                {section === 'client' ? 'Cliente' : ''}
+                {section === 'items' ? 'Conceptos' : ''}
+                {section === 'totals' ? 'Totales' : ''}
+                {section === 'footer' ? 'Pie' : ''}
+              </span>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  onclick={() => moveSection(index, -1)}
+                  class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-500 hover:text-slate-700"
+                >
+                  Subir
+                </button>
+                <button
+                  type="button"
+                  onclick={() => moveSection(index, 1)}
+                  class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-500 hover:text-slate-700"
+                >
+                  Bajar
+                </button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">
+        <p class="font-semibold text-slate-700">Personalización avanzada</p>
+        <p class="mt-2">Activa Pro para acceder a más plantillas y branding completo.</p>
+        <a href="/pricing" class="mt-3 inline-flex text-xs font-semibold text-blue-600 hover:text-blue-700">Ver plan Pro</a>
+      </div>
+    </aside>
+
+    <div
+      id="invoice-canvas"
+      class={`relative mx-auto w-[800px] max-w-full rounded-3xl border ${templateClass()} bg-white p-12 shadow-xl`}
+    >
+      {#if showWatermark}
+        <div class="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl">
+          <div class="absolute inset-0 flex items-center justify-center opacity-10">
+            <div class="grid grid-cols-2 gap-10 text-[36px] font-semibold uppercase tracking-[0.35em] text-slate-400">
+              <span>FACTURASGEN</span><span>FACTURASGEN</span>
+              <span>FACTURASGEN</span><span>FACTURASGEN</span>
+              <span>FACTURASGEN</span><span>FACTURASGEN</span>
+              <span>FACTURASGEN</span><span>FACTURASGEN</span>
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      <div class="relative space-y-10">
+        {#each sectionOrder as section}
+          {#if section === 'header'}
+            <div class="flex flex-wrap items-start justify-between gap-6">
+              <div>
+                <p class="text-xs uppercase tracking-[0.3em] text-slate-400">Factura</p>
+                <h2 class="mt-2 text-4xl font-semibold text-slate-900">INV-{Math.floor(Math.random() * 1000)}</h2>
+                <div class="mt-6 space-y-1 text-sm text-slate-500">
+                  {#if profile.business_name}
+                    <div class="text-slate-900 font-semibold">{profile.business_name}</div>
+                  {/if}
+                  {#if profile.tax_id}
+                    <div>NIF/CIF: {profile.tax_id}</div>
+                  {/if}
+                  {#if profile.address}
+                    <div class="whitespace-pre-line">{profile.address}</div>
+                  {/if}
+                </div>
+              </div>
+              <div class="text-right">
+                {#if profile.logo_url}
+                  <img src={profile.logo_url} alt="Logo" class="h-14 w-auto object-contain ml-auto mb-2" />
+                {:else}
+                  <div class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white">
+                    LOGO
+                  </div>
+                {/if}
+                <p class="mt-2 text-xs uppercase tracking-[0.3em] text-slate-400">Documento oficial</p>
+              </div>
+            </div>
+
+            {#if coverImageUrl}
+              <div class="mt-6 overflow-hidden rounded-2xl border border-slate-100">
+                <img src={coverImageUrl} alt="Portada" class="h-40 w-full object-cover" />
+              </div>
+            {/if}
           {/if}
-          {#if profile.tax_id}
-            <div>NIF/CIF: {profile.tax_id}</div>
+
+          {#if section === 'client'}
+            <div>
+              <label class="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 mb-3">Cliente</label>
+              <input
+                type="text"
+                bind:value={clientName}
+                placeholder="Nombre del cliente o empresa"
+                class="w-full border-b border-slate-200 pb-3 text-2xl font-semibold text-slate-900 outline-none focus:border-blue-500 transition"
+              />
+            </div>
           {/if}
-          {#if profile.address}
-            <div class="whitespace-pre-line">{profile.address}</div>
+
+          {#if section === 'items'}
+            <div>
+              <div class="grid grid-cols-12 gap-4 border-b border-slate-100 pb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                <div class="col-span-6">Concepto</div>
+                <div class="col-span-2 text-right">Cant.</div>
+                <div class="col-span-2 text-right">Precio</div>
+                <div class="col-span-2 text-right">Total</div>
+              </div>
+
+              {#each items as item, i}
+                <div class="grid grid-cols-12 items-start gap-4 border-b border-slate-50 py-3 hover:bg-slate-50/60 transition">
+                  <div class="col-span-6 space-y-2">
+                    <input
+                      type="text"
+                      bind:value={item.desc}
+                      placeholder="Ej. Consultoría mensual"
+                      class="w-full bg-transparent text-sm font-medium text-slate-700 outline-none"
+                    />
+                    <input
+                      type="url"
+                      bind:value={item.imageUrl}
+                      placeholder="Imagen opcional (URL)"
+                      class="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-500"
+                    />
+                    {#if item.imageUrl}
+                      <img src={item.imageUrl} alt="Imagen del concepto" class="h-16 w-24 rounded-lg object-cover border border-slate-100" />
+                    {/if}
+                  </div>
+                  <div class="col-span-2 text-right">
+                    <input type="number" bind:value={item.qty} class="w-full bg-transparent text-right text-sm text-slate-700 outline-none" />
+                  </div>
+                  <div class="col-span-2 text-right">
+                    <input type="number" bind:value={item.price} class="w-full bg-transparent text-right text-sm text-slate-700 outline-none" />
+                  </div>
+                  <div class="col-span-1 text-right text-sm font-semibold text-slate-900">
+                    {(item.price * item.qty).toFixed(2)}€
+                  </div>
+                  <div class="col-span-1 text-right">
+                    <button onclick={() => removeItem(i)} class="text-slate-300 hover:text-red-500 transition">Eliminar</button>
+                  </div>
+                </div>
+              {/each}
+
+              <button onclick={addItem} class="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700">
+                Añadir concepto
+              </button>
+            </div>
           {/if}
-        </div>
-      </div>
-      <div class="text-right">
-        {#if profile.logo_url}
-          <img src={profile.logo_url} alt="Logo" class="h-14 w-auto object-contain ml-auto mb-2" />
-        {:else}
-          <div class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white">
-            LOGO
-          </div>
-        {/if}
-        <p class="mt-2 text-xs uppercase tracking-[0.3em] text-slate-400">Documento oficial</p>
-      </div>
-    </div>
 
-    <div class="mt-10">
-      <label class="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 mb-3">Cliente</label>
-      <input
-        type="text"
-        bind:value={clientName}
-        placeholder="Nombre del cliente o empresa"
-        class="w-full border-b border-slate-200 pb-3 text-2xl font-semibold text-slate-900 outline-none focus:border-blue-500 transition"
-      />
-    </div>
+          {#if section === 'totals'}
+            <div class="flex justify-end border-t border-slate-200 pt-8">
+              <div class="w-72 space-y-4 text-sm">
+                <div class="flex justify-between text-slate-500">
+                  <span>Subtotal</span>
+                  <span class="font-medium text-slate-900">{subtotal().toFixed(2)} €</span>
+                </div>
+                <div class="flex justify-between items-center text-slate-500">
+                  <span>IVA ({taxRate}%)</span>
+                  <div class="flex items-center gap-2">
+                    <input type="number" bind:value={taxRate} class="w-12 border-b border-slate-200 text-right text-sm outline-none" />
+                    <span>%</span>
+                  </div>
+                </div>
+                <div class="flex justify-between text-xl font-semibold text-slate-900 pt-3">
+                  <span>Total</span>
+                  <span class="text-blue-600">{total().toFixed(2)} €</span>
+                </div>
+              </div>
+            </div>
+          {/if}
 
-    <div class="mt-10">
-      <div class="grid grid-cols-12 gap-4 border-b border-slate-100 pb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-        <div class="col-span-6">Concepto</div>
-        <div class="col-span-2 text-right">Cant.</div>
-        <div class="col-span-2 text-right">Precio</div>
-        <div class="col-span-2 text-right">Total</div>
-      </div>
-
-      {#each items as item, i}
-        <div class="grid grid-cols-12 items-center gap-4 border-b border-slate-50 py-3 hover:bg-slate-50/60 transition">
-          <div class="col-span-6">
-            <input
-              type="text"
-              bind:value={item.desc}
-              placeholder="Ej. Consultoría mensual"
-              class="w-full bg-transparent text-sm font-medium text-slate-700 outline-none"
-            />
-          </div>
-          <div class="col-span-2 text-right">
-            <input type="number" bind:value={item.qty} class="w-full bg-transparent text-right text-sm text-slate-700 outline-none" />
-          </div>
-          <div class="col-span-2 text-right">
-            <input type="number" bind:value={item.price} class="w-full bg-transparent text-right text-sm text-slate-700 outline-none" />
-          </div>
-          <div class="col-span-1 text-right text-sm font-semibold text-slate-900">
-            {(item.price * item.qty).toFixed(2)}€
-          </div>
-          <div class="col-span-1 text-right">
-            <button onclick={() => removeItem(i)} class="text-slate-300 hover:text-red-500 transition">✕</button>
-          </div>
-        </div>
-      {/each}
-
-      <button onclick={addItem} class="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700">
-        + Añadir concepto
-      </button>
-    </div>
-
-    <div class="mt-12 flex justify-end border-t border-slate-200 pt-8">
-      <div class="w-72 space-y-4 text-sm">
-        <div class="flex justify-between text-slate-500">
-          <span>Subtotal</span>
-          <span class="font-medium text-slate-900">{subtotal().toFixed(2)} €</span>
-        </div>
-        <div class="flex justify-between items-center text-slate-500">
-          <span>IVA ({taxRate}%)</span>
-          <div class="flex items-center gap-2">
-            <input type="number" bind:value={taxRate} class="w-12 border-b border-slate-200 text-right text-sm outline-none" />
-            <span>%</span>
-          </div>
-        </div>
-        <div class="flex justify-between text-xl font-semibold text-slate-900 pt-3">
-          <span>Total</span>
-          <span class="text-blue-600">{total().toFixed(2)} €</span>
-        </div>
+          {#if section === 'footer'}
+            <div class="border-t border-slate-100 pt-4 text-xs text-slate-400">
+              Gracias por su confianza. Este documento es una factura válida generada mediante FacturasGen.
+            </div>
+          {/if}
+        {/each}
       </div>
     </div>
-
-    <div class="mt-14 border-t border-slate-100 pt-4 text-xs text-slate-400">
-      Gracias por su confianza. Este documento es una factura válida generada mediante FacturasGen.
-    </div>
-    {#if showWatermark}
-      <div class="mt-4 text-[10px] text-slate-300 text-center uppercase tracking-[0.3em]">
-        Generado con FacturasGen
-      </div>
-    {/if}
   </div>
 </div>
 

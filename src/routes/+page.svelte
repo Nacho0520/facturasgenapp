@@ -31,14 +31,14 @@
           <a href="/login" class="rounded-full bg-blue-600 px-6 py-3 text-white font-semibold hover:bg-blue-700">
             Empezar gratis
           </a>
-          <a href="/login" class="rounded-full border border-slate-200 px-6 py-3 text-slate-700 font-semibold hover:border-slate-300">
+          <a href="/demo" class="rounded-full border border-slate-200 px-6 py-3 text-slate-700 font-semibold hover:border-slate-300">
             Ver demo
           </a>
         </div>
         <div class="mt-8 flex items-center gap-6 text-sm text-slate-500">
           <div class="flex items-center gap-2">
             <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-            Datos seguros en Supabase
+            Datos seguros
           </div>
           <div class="flex items-center gap-2">
             <span class="h-2 w-2 rounded-full bg-blue-500"></span>
