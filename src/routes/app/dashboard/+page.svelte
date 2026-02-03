@@ -3,12 +3,18 @@
   import { goto } from '$app/navigation';
   import { supabase } from '$lib/supabase';
 
+  const PAGE_SIZE = 20;
+
   /** @typedef {{ price: number, qty: number }} LineItem */
   /** @typedef {{ id: string, number?: number, client_name?: string, created_at?: string, line_items?: LineItem[], tax_rate?: number, status?: string }} Invoice */
 
   let invoices = $state(/** @type {Invoice[]} */ ([]));
+  let totalCount = $state(0);
   let loading = $state(true);
+  let loadingMore = $state(false);
   let errorMessage = $state('');
+  let hasMore = $state(true);
+  let cursor = $state(/** @type {string | null} */ (null));
 
   const totalRevenue = () =>
     invoices.reduce((sum, invoice) => sum + calculateTotal(invoice), 0);
@@ -31,28 +37,61 @@
     return subtotal * (1 + taxRate / 100);
   };
 
-  onMount(async () => {
+  /** @param {boolean} isFirst */
+  async function loadPage(isFirst) {
     try {
+      if (isFirst) {
+        loading = true;
+        invoices = [];
+        cursor = null;
+        hasMore = true;
+      } else {
+        loadingMore = true;
+      }
+      errorMessage = '';
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         goto('/?auth=required');
         return;
       }
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('invoices')
-        .select('*')
+        .select('*', isFirst ? { count: 'exact' } : undefined)
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(PAGE_SIZE);
+
+      if (cursor) {
+        query = query.lt('created_at', cursor);
+      }
+
+      const { data, error, count } = await query;
 
       if (error) throw error;
-      invoices = data ?? [];
+      const list = data ?? [];
+      if (isFirst) {
+        totalCount = count ?? list.length;
+        invoices = list;
+      } else {
+        invoices = [...invoices, ...list];
+      }
+      hasMore = list.length === PAGE_SIZE;
+      if (list.length > 0 && list[list.length - 1].created_at) {
+        cursor = list[list.length - 1].created_at;
+      }
     } catch (error) {
       const err = /** @type {Error} */ (error);
       errorMessage = err.message ?? 'Error al cargar las facturas.';
     } finally {
       loading = false;
+      loadingMore = false;
     }
+  }
+
+  onMount(() => {
+    loadPage(true);
   });
 </script>
 
@@ -70,7 +109,7 @@
   <div class="grid gap-4 md:grid-cols-3">
     <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <p class="text-xs text-slate-400">Facturas emitidas</p>
-      <p class="mt-2 text-2xl font-semibold text-slate-900">{invoices.length}</p>
+      <p class="mt-2 text-2xl font-semibold text-slate-900">{loading ? '—' : totalCount}</p>
     </div>
     <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <p class="text-xs text-slate-400">Facturas en borrador</p>
@@ -103,7 +142,7 @@
     <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div class="flex items-center justify-between border-b border-slate-100 px-6 py-4">
         <h3 class="text-sm font-semibold text-slate-700">Últimas facturas</h3>
-        <span class="text-xs text-slate-400">Actualizado hoy</span>
+        <span class="text-xs text-slate-400">{invoices.length} de {totalCount} cargadas</span>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm">
@@ -118,14 +157,15 @@
           </thead>
           <tbody class="divide-y divide-slate-100">
             {#each invoices as invoice}
+              {@const status = invoice.status ?? 'draft'}
               <tr class="cursor-pointer hover:bg-slate-50 transition" onclick={() => goto(`/app/editor?id=${invoice.id}`)}>
                 <td class="px-6 py-4 font-semibold text-slate-800">{invoice.number ?? '-'}</td>
                 <td class="px-6 py-4 text-slate-600">{invoice.client_name || 'Sin nombre'}</td>
                 <td class="px-6 py-4 text-slate-500">{formatDate(invoice.created_at)}</td>
                 <td class="px-6 py-4 text-right font-semibold text-slate-900">{calculateTotal(invoice).toFixed(2)} €</td>
                 <td class="px-6 py-4 text-center">
-                  <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                    {invoice.status ?? 'draft'}
+                  <span class="rounded-full px-3 py-1 text-xs font-semibold {status === 'sent' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">
+                    {status === 'sent' ? 'Emitida' : 'Borrador'}
                   </span>
                 </td>
               </tr>
@@ -133,6 +173,21 @@
           </tbody>
         </table>
       </div>
+      {#if hasMore && !loadingMore}
+        <div class="border-t border-slate-100 px-6 py-4">
+          <button
+            type="button"
+            onclick={() => loadPage(false)}
+            class="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+          >
+            Cargar más
+          </button>
+        </div>
+      {:else if loadingMore}
+        <div class="border-t border-slate-100 px-6 py-4 text-center text-sm text-slate-400">
+          Cargando...
+        </div>
+      {/if}
     </div>
   {/if}
 </div>

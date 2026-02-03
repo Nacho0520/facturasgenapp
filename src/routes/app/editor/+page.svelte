@@ -3,16 +3,17 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
-  import html2pdf from 'html2pdf.js'; // Asegúrate de haber hecho: npm install html2pdf.js
   import { get } from 'svelte/store';
 
-  // --- ESTADOS (Svelte 5) ---
+  const AUTOSAVE_DELAY_MS = 2500;
+
   /** @typedef {{ desc: string, price: number, qty: number, imageUrl?: string }} LineItem */
 
   let clientName = $state("");
   let taxRate = $state(21);
   let invoiceId = $state(/** @type {string | null} */ (null));
   let isEditing = $state(false);
+  let invoiceStatus = $state(/** @type {'draft' | 'sent'} */ ('draft'));
   let template = $state('classic');
   let coverImageUrl = $state('');
   let isPro = $state(false);
@@ -29,6 +30,8 @@
   let sectionOrder = $state(/** @type {string[]} */ (['header', 'client', 'items', 'totals', 'footer']));
   
   let saving = $state(false);
+  let saveStatus = $state(/** @type {'' | 'saving' | 'saved' | 'error'} */ (''));
+  let autosaveTimer = /** @type {ReturnType<typeof setTimeout> | null} */ (null);
   let user = $state(/** @type {import('@supabase/supabase-js').User | null} */ (null));
 
   // --- CÁLCULOS REACTIVOS ---
@@ -88,6 +91,12 @@
     }
   });
 
+  $effect(() => {
+    if (!invoiceId || invoiceStatus === 'sent') return;
+    const _ = [clientName, items, taxRate];
+    scheduleAutosave();
+  });
+
   // --- FUNCIONES DE LA TABLA ---
   function addItem() {
     items.push({ desc: "", price: 0, qty: 1, imageUrl: "" });
@@ -98,10 +107,11 @@
     items = items.filter((_, i) => i !== index);
   }
 
-  // --- GENERACIÓN DE PDF ---
-  function downloadPDF() {
+  // --- GENERACIÓN DE PDF (lazy load para no cargar en dashboard) ---
+  async function downloadPDF() {
     const element = document.getElementById('invoice-canvas');
     if (!element) return;
+    const html2pdf = (await import('html2pdf.js')).default;
     /** @type {[number, number, number, number]} */
     const margin = [0.5, 0.5, 0.5, 0.5];
     /** @type {'jpeg'} */
@@ -124,11 +134,23 @@
   }
 
   // --- GUARDADO EN BD ---
-  async function saveInvoice() {
-    if (!clientName) return alert("Por favor, escribe el nombre del cliente");
+  async function saveDraft() {
+    await persistInvoice('draft');
+  }
 
+  async function emitInvoice() {
+    if (!clientName.trim()) {
+      alert("Escribe el nombre del cliente antes de emitir.");
+      return;
+    }
+    await persistInvoice('sent');
+  }
+
+  /** @param {'draft' | 'sent'} status */
+  async function persistInvoice(status) {
     try {
       saving = true;
+      saveStatus = 'saving';
       const { data: { user: currentUser } } = await supabase.auth.getUser();
 
       if (!currentUser) {
@@ -138,32 +160,52 @@
 
       const payload = {
         user_id: currentUser.id,
-        client_name: clientName,
+        client_name: clientName.trim() || 'Sin nombre',
         line_items: items,
         tax_rate: taxRate,
-        status: 'sent',
+        status,
         template,
-        cover_image_url: coverImageUrl,
+        cover_image_url: coverImageUrl || null,
         section_order: sectionOrder
       };
 
-      const { error } = isEditing
+      const result = isEditing
         ? await supabase
             .from('invoices')
             .update(payload)
             .eq('id', invoiceId)
             .eq('user_id', currentUser.id)
-        : await supabase.from('invoices').insert(payload);
+        : await supabase.from('invoices').insert(payload).select('id').single();
 
-      if (error) throw error;
-      alert(isEditing ? "¡Factura actualizada correctamente!" : "¡Factura guardada correctamente!");
-      goto('/app/dashboard');
+      if (result.error) throw result.error;
+      invoiceStatus = status;
+      saveStatus = 'saved';
+      if (!isEditing && result.data?.id) {
+        invoiceId = result.data.id;
+        isEditing = true;
+      }
+      setTimeout(() => { saveStatus = ''; }, 2500);
+      if (status === 'sent') {
+        goto('/app/dashboard');
+      }
     } catch (err) {
       const error = /** @type {Error} */ (err);
+      saveStatus = 'error';
       alert("Error: " + error.message);
     } finally {
       saving = false;
     }
+  }
+
+  // --- AUTOSAVE (borrador) ---
+  function scheduleAutosave() {
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+    if (invoiceStatus === 'sent') return;
+    autosaveTimer = setTimeout(async () => {
+      autosaveTimer = null;
+      if (!user || !invoiceId || saving) return;
+      await persistInvoice('draft');
+    }, AUTOSAVE_DELAY_MS);
   }
 
   /** @param {string} id */
@@ -176,7 +218,7 @@
 
     const { data, error } = await supabase
       .from('invoices')
-      .select('client_name, line_items, tax_rate, template, cover_image_url, section_order')
+      .select('client_name, line_items, tax_rate, template, cover_image_url, section_order, status')
       .eq('id', id)
       .eq('user_id', currentUser.id)
       .maybeSingle();
@@ -197,6 +239,7 @@
     sectionOrder = Array.isArray(data.section_order) && data.section_order.length > 0
       ? data.section_order
       : ['header', 'client', 'items', 'totals', 'footer'];
+    invoiceStatus = (data.status === 'sent' ? 'sent' : 'draft');
   }
 
   /** @param {string} value */
@@ -229,23 +272,42 @@
         {isEditing ? 'Estás editando una factura guardada.' : 'Crea una factura clara y lista para enviar.'}
       </p>
     </div>
-    <div class="flex flex-wrap gap-3">
+    <div class="flex flex-wrap items-center gap-3">
+      {#if saveStatus === 'saving'}
+        <span class="text-sm text-slate-500">Guardando...</span>
+      {:else if saveStatus === 'saved'}
+        <span class="text-sm text-emerald-600">Guardado</span>
+      {:else if saveStatus === 'error'}
+        <span class="text-sm text-red-600">Error al guardar</span>
+      {/if}
       <button
         onclick={downloadPDF}
         class="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:text-slate-900 transition"
       >
         Descargar PDF
       </button>
-
       <button
-        onclick={saveInvoice}
+        onclick={saveDraft}
+        disabled={saving || !user}
+        class="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 disabled:opacity-50 transition"
+      >
+        {saving ? 'Guardando...' : 'Guardar borrador'}
+      </button>
+      <button
+        onclick={emitInvoice}
         disabled={saving || !user}
         class="rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition"
       >
-        {saving ? 'Guardando...' : (isEditing ? 'Actualizar factura' : 'Guardar en nube')}
+        Emitir factura
       </button>
     </div>
   </div>
+
+  {#if isEditing && invoiceStatus === 'sent'}
+    <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      Estás editando una factura ya emitida. Los cambios pueden afectar a la trazabilidad; usa solo para correcciones puntuales.
+    </div>
+  {/if}
 
   <div class="grid gap-6 lg:grid-cols-[320px_1fr]">
     <aside class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
@@ -273,7 +335,7 @@
           placeholder="https://"
           class="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
         />
-        <p class="mt-2 text-xs text-slate-400">Se mostrará en la parte superior de la factura.</p>
+        <p class="mt-2 text-xs text-slate-400">Se mostrará en la parte superior. Recomendamos subir a tu propio hosting; URLs externas pueden fallar al generar el PDF (CORS).</p>
       </div>
 
       <div>

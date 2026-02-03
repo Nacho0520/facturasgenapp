@@ -131,14 +131,15 @@
         </div>
 
         <div>
-        <label class="block text-sm font-medium text-slate-700 mb-2" for={fieldIds.logoUrl}>Logo (URL)</label>
+          <label class="block text-sm font-medium text-slate-700 mb-2" for={fieldIds.logoUrl}>Logo (URL)</label>
           <input
             type="url"
-          id={fieldIds.logoUrl}
+            id={fieldIds.logoUrl}
             bind:value={profile.logo_url}
             placeholder="https://"
             class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition"
           />
+          <p class="mt-2 text-xs text-slate-400">Recomendamos subir el logo a tu propio hosting; URLs externas pueden fallar al generar el PDF por CORS.</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-4">
