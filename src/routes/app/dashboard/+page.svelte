@@ -6,21 +6,27 @@
   const PAGE_SIZE = 20;
 
   /** @typedef {{ price: number, qty: number }} LineItem */
-  /** @typedef {{ id: string, number?: number, client_name?: string, created_at?: string, line_items?: LineItem[], tax_rate?: number, status?: string }} Invoice */
+  /** @typedef {{ id: string, number?: number, client_name?: string, created_at?: string, line_items?: LineItem[], tax_rate?: number, status?: string, email_sent_to?: string }} Invoice */
 
   let invoices = $state(/** @type {Invoice[]} */ ([]));
   let totalCount = $state(0);
+  let totalRevenueFromRpc = $state(/** @type {number | null} */ (null));
+  let draftCountFromRpc = $state(/** @type {number | null} */ (null));
   let loading = $state(true);
   let loadingMore = $state(false);
+  let metricsLoading = $state(true);
   let errorMessage = $state('');
   let hasMore = $state(true);
   let cursor = $state(/** @type {string | null} */ (null));
+  let sendingTo = $state(/** @type {string | null} */ (null));
+  let sendEmailValue = $state('');
+  let sendLoading = $state(false);
 
   const totalRevenue = () =>
-    invoices.reduce((sum, invoice) => sum + calculateTotal(invoice), 0);
+    totalRevenueFromRpc ?? invoices.reduce((sum, invoice) => sum + calculateTotal(invoice), 0);
 
   const draftCount = () =>
-    invoices.filter((invoice) => (invoice.status ?? 'draft') === 'draft').length;
+    draftCountFromRpc ?? invoices.filter((invoice) => (invoice.status ?? 'draft') === 'draft').length;
 
   /** @param {string | null | undefined} value */
   const formatDate = (value) => {
@@ -90,8 +96,62 @@
     }
   }
 
+  /** @param {string} invoiceId */
+  async function openSendEmail(invoiceId) {
+    sendingTo = invoiceId;
+    sendEmailValue = '';
+  }
+
+  function closeSendEmail() {
+    sendingTo = null;
+    sendEmailValue = '';
+  }
+
+  /** @param {string} invoiceId */
+  async function submitSendEmail(invoiceId) {
+    if (!sendEmailValue.trim()) return;
+    try {
+      sendLoading = true;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { error } = await supabase
+        .from('invoices')
+        .update({ email_sent_to: sendEmailValue.trim() })
+        .eq('id', invoiceId)
+        .eq('user_id', user.id);
+      if (error) throw error;
+      invoices = invoices.map((i) => i.id === invoiceId ? { ...i, email_sent_to: sendEmailValue.trim() } : i);
+      closeSendEmail();
+    } catch (err) {
+      const e = /** @type {Error} */ (err);
+      alert(e.message ?? 'Error al guardar');
+    } finally {
+      sendLoading = false;
+    }
+  }
+
+  async function fetchMetrics() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data, error } = await supabase.rpc('get_user_invoice_stats', { p_user_id: user.id });
+      if (error) return;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row) {
+        totalCount = Number(row.total_count ?? 0);
+        draftCountFromRpc = Number(row.draft_count ?? 0);
+        totalRevenueFromRpc = Number(row.total_revenue ?? 0);
+      }
+    } catch (_) {
+      // fallback: metrics from loaded invoices
+    } finally {
+      metricsLoading = false;
+    }
+  }
+
   onMount(() => {
     loadPage(true);
+    fetchMetrics();
   });
 </script>
 
@@ -109,15 +169,15 @@
   <div class="grid gap-4 md:grid-cols-3">
     <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <p class="text-xs text-slate-400">Facturas emitidas</p>
-      <p class="mt-2 text-2xl font-semibold text-slate-900">{loading ? '—' : totalCount}</p>
+      <p class="mt-2 text-2xl font-semibold text-slate-900">{loading && metricsLoading ? '—' : totalCount}</p>
     </div>
     <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <p class="text-xs text-slate-400">Facturas en borrador</p>
-      <p class="mt-2 text-2xl font-semibold text-slate-900">{draftCount()}</p>
+      <p class="mt-2 text-2xl font-semibold text-slate-900">{metricsLoading && !draftCountFromRpc ? (loading ? '—' : draftCount()) : draftCount()}</p>
     </div>
     <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <p class="text-xs text-slate-400">Ingresos estimados</p>
-      <p class="mt-2 text-2xl font-semibold text-blue-600">{totalRevenue().toFixed(2)} €</p>
+      <p class="mt-2 text-2xl font-semibold text-blue-600">{metricsLoading && totalRevenueFromRpc === null ? (loading ? '—' : totalRevenue().toFixed(2) + ' €') : totalRevenue().toFixed(2)} €</p>
     </div>
   </div>
 
@@ -153,20 +213,36 @@
               <th class="px-6 py-4">Fecha</th>
               <th class="px-6 py-4 text-right">Total</th>
               <th class="px-6 py-4 text-center">Estado</th>
+              <th class="px-6 py-4">Enviado a</th>
+              <th class="px-6 py-4 w-24"></th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             {#each invoices as invoice}
               {@const status = invoice.status ?? 'draft'}
-              <tr class="cursor-pointer hover:bg-slate-50 transition" onclick={() => goto(`/app/editor?id=${invoice.id}`)}>
-                <td class="px-6 py-4 font-semibold text-slate-800">{invoice.number ?? '-'}</td>
-                <td class="px-6 py-4 text-slate-600">{invoice.client_name || 'Sin nombre'}</td>
-                <td class="px-6 py-4 text-slate-500">{formatDate(invoice.created_at)}</td>
-                <td class="px-6 py-4 text-right font-semibold text-slate-900">{calculateTotal(invoice).toFixed(2)} €</td>
+              <tr class="hover:bg-slate-50 transition">
+                <td class="px-6 py-4 font-semibold text-slate-800 cursor-pointer" onclick={() => goto(`/app/editor?id=${invoice.id}`)}>{invoice.number ?? '-'}</td>
+                <td class="px-6 py-4 text-slate-600 cursor-pointer" onclick={() => goto(`/app/editor?id=${invoice.id}`)}>{invoice.client_name || 'Sin nombre'}</td>
+                <td class="px-6 py-4 text-slate-500 cursor-pointer" onclick={() => goto(`/app/editor?id=${invoice.id}`)}>{formatDate(invoice.created_at)}</td>
+                <td class="px-6 py-4 text-right font-semibold text-slate-900 cursor-pointer" onclick={() => goto(`/app/editor?id=${invoice.id}`)}>{calculateTotal(invoice).toFixed(2)} €</td>
                 <td class="px-6 py-4 text-center">
                   <span class="rounded-full px-3 py-1 text-xs font-semibold {status === 'sent' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">
                     {status === 'sent' ? 'Emitida' : 'Borrador'}
                   </span>
+                </td>
+                <td class="px-6 py-4 text-xs text-slate-500">{invoice.email_sent_to || '—'}</td>
+                <td class="px-6 py-4" onclick={(e) => e.stopPropagation()}>
+                  {#if status === 'sent'}
+                    {#if sendingTo === invoice.id}
+                      <div class="flex items-center gap-2">
+                        <input type="email" bind:value={sendEmailValue} placeholder="email@cliente.com" class="w-36 rounded border border-slate-200 px-2 py-1 text-xs" />
+                        <button type="button" disabled={sendLoading} onclick={() => submitSendEmail(invoice.id)} class="text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50">Guardar</button>
+                        <button type="button" onclick={closeSendEmail} class="text-xs text-slate-500 hover:text-slate-700">Cancelar</button>
+                      </div>
+                    {:else}
+                      <button type="button" onclick={() => openSendEmail(invoice.id)} class="text-xs font-semibold text-blue-600 hover:text-blue-700">Enviar</button>
+                    {/if}
+                  {/if}
                 </td>
               </tr>
             {/each}

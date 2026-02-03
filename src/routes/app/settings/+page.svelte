@@ -13,6 +13,8 @@
   let loading = $state(true);
   let saving = $state(false);
   let message = $state('');
+  let logoUploading = $state(false);
+  let userId = $state(/** @type {string | null} */ (null));
 
   const fieldIds = {
     businessName: 'business-name',
@@ -28,6 +30,7 @@
         goto('/?auth=required');
         return;
       }
+      userId = user.id;
 
       const { data, error } = await supabase
         .from('profiles')
@@ -81,6 +84,43 @@
     }
   };
 
+  /** @param {Event} e */
+  async function uploadLogo(e) {
+    const input = /** @type {HTMLInputElement} */ (e.target);
+    const file = input.files?.[0];
+    if (!file || !userId) return;
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
+    if (!allowed.includes(file.type)) {
+      message = 'Formato no permitido. Usa JPEG, PNG, WebP o SVG.';
+      return;
+    }
+    try {
+      logoUploading = true;
+      message = '';
+      const ext = file.name.split('.').pop() || 'png';
+      const path = `${userId}/logo.${ext}`;
+      const { error: uploadError } = await supabase.storage.from('logos').upload(path, file, { upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(path);
+      profile.logo_url = publicUrl;
+      const { error: updateError } = await supabase.from('profiles').upsert({
+        id: userId,
+        logo_url: publicUrl,
+        business_name: profile.business_name,
+        tax_id: profile.tax_id,
+        address: profile.address
+      });
+      if (updateError) throw updateError;
+      message = 'Logo subido correctamente.';
+    } catch (err) {
+      const error = /** @type {Error} */ (err);
+      message = '❌ ' + (error.message ?? 'Error al subir el logo.');
+    } finally {
+      logoUploading = false;
+      input.value = '';
+    }
+  }
+
   onMount(loadProfile);
 </script>
 
@@ -131,15 +171,22 @@
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-2" for={fieldIds.logoUrl}>Logo (URL)</label>
-          <input
-            type="url"
-            id={fieldIds.logoUrl}
-            bind:value={profile.logo_url}
-            placeholder="https://"
-            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition"
-          />
-          <p class="mt-2 text-xs text-slate-400">Recomendamos subir el logo a tu propio hosting; URLs externas pueden fallar al generar el PDF por CORS.</p>
+          <label class="block text-sm font-medium text-slate-700 mb-2" for="logo-upload">Logo</label>
+          <div class="flex flex-wrap items-center gap-3">
+            <label for="logo-upload" class="cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 transition">
+              {logoUploading ? 'Subiendo...' : 'Subir imagen'}
+            </label>
+            <input id="logo-upload" type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" onchange={uploadLogo} class="hidden" />
+            <span class="text-xs text-slate-400">o URL:</span>
+            <input
+              type="url"
+              id={fieldIds.logoUrl}
+              bind:value={profile.logo_url}
+              placeholder="https://"
+              class="flex-1 min-w-0 rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition"
+            />
+          </div>
+          <p class="mt-2 text-xs text-slate-400">Recomendado: subir imagen (JPEG, PNG, WebP, SVG). URLs externas pueden fallar al generar el PDF por CORS.</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-4">

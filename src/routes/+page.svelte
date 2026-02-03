@@ -128,5 +128,9 @@
         </p>
       </div>
     </section>
+
+    <footer class="mt-20 border-t border-slate-200 py-8 text-center text-sm text-slate-500">
+      <a href="/privacy" class="text-slate-600 hover:text-slate-900">Política de privacidad</a>
+    </footer>
   </main>
 </div>

@@ -3,7 +3,7 @@
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { PUBLIC_SITE_URL } from '$env/static/public';
+  import { env } from '$env/dynamic/public';
   import logo from '$lib/assets/logo.svg';
 
   // Usamos un objeto simple para evitar problemas de reactividad si usas Svelte 5
@@ -15,8 +15,9 @@
   let message = '';
 
   const getRedirectUrl = () => {
-    if (PUBLIC_SITE_URL && PUBLIC_SITE_URL.trim() !== '') {
-      return `${PUBLIC_SITE_URL.replace(/\/$/, '')}/app/dashboard`;
+    const siteUrl = env.PUBLIC_SITE_URL ?? '';
+    if (siteUrl && siteUrl.trim() !== '') {
+      return `${siteUrl.replace(/\/$/, '')}/app/dashboard`;
     }
     if (browser) {
       return `${window.location.origin}/app/dashboard`;

@@ -9,12 +9,23 @@
 
   /** @typedef {{ desc: string, price: number, qty: number, imageUrl?: string }} LineItem */
 
+  const TAX_PRESETS = [
+    { label: 'IVA 21%', value: 21 },
+    { label: 'IVA 10%', value: 10 },
+    { label: 'IVA 4%', value: 4 },
+    { label: 'Exento', value: 0 },
+    { label: 'IRPF 15%', value: -15 },
+    { label: 'Rec. equiv. 5,2%', value: 5.2 }
+  ];
+
   let clientName = $state("");
   let taxRate = $state(21);
+  let invoiceNumber = $state(/** @type {number | null} */ (null));
   let invoiceId = $state(/** @type {string | null} */ (null));
   let isEditing = $state(false);
   let invoiceStatus = $state(/** @type {'draft' | 'sent'} */ ('draft'));
   let template = $state('classic');
+  let readOnly = $state(false);
   let coverImageUrl = $state('');
   let isPro = $state(false);
   let profile = $state({
@@ -99,12 +110,66 @@
 
   // --- FUNCIONES DE LA TABLA ---
   function addItem() {
-    items.push({ desc: "", price: 0, qty: 1, imageUrl: "" });
+    items = [...items, { desc: "", price: 0, qty: 1, imageUrl: "" }];
   }
 
   /** @param {number} index */
   function removeItem(index) {
     items = items.filter((_, i) => i !== index);
+  }
+
+  /** @param {number} index */
+  function duplicateItem(index) {
+    const copy = { ...items[index], desc: items[index].desc ? items[index].desc + ' (copia)' : '' };
+    items = [...items.slice(0, index + 1), copy, ...items.slice(index + 1)];
+  }
+
+  /** @param {KeyboardEvent} e @param {number} index @param {boolean} isLast */
+  function handleItemKeydown(e, index, isLast) {
+    if (e.key === 'Enter' && isLast) {
+      e.preventDefault();
+      addItem();
+    }
+  }
+
+  /** Navegación por Tab entre campos de conceptos: desc → qty → price → siguiente fila desc */
+  /** @param {KeyboardEvent} e @param {number} rowIndex */
+  function handleItemTab(e, rowIndex) {
+    if (e.key !== 'Tab') return;
+    const target = /** @type {HTMLInputElement | null} */ (e.currentTarget);
+    if (!target) return;
+    const row = target.closest ? target.closest('.invoice-item-row') : null;
+    if (!row) return;
+    const inputs = row.querySelectorAll('input[type="text"], input[type="number"], input[type="url"]');
+    const current = document.activeElement;
+    const idx = current ? Array.from(inputs).indexOf(current) : -1;
+    if (idx < 0) return;
+    if (e.shiftKey) {
+      if (idx > 0) {
+        e.preventDefault();
+        const prev = inputs[idx - 1];
+        if (prev instanceof HTMLInputElement) prev.focus();
+      }
+    } else {
+      if (idx < inputs.length - 1) {
+        e.preventDefault();
+        const next = inputs[idx + 1];
+        if (next instanceof HTMLInputElement) next.focus();
+      } else if (isLastRow(rowIndex)) {
+        e.preventDefault();
+        addItem();
+        setTimeout(() => {
+          const nextRow = document.querySelector('.invoice-item-row:nth-of-type(' + (rowIndex + 2) + ')');
+          const first = nextRow ? nextRow.querySelector('input') : null;
+          if (first instanceof HTMLInputElement) first.focus();
+        }, 0);
+      }
+    }
+  }
+
+  /** @param {number} rowIndex */
+  function isLastRow(rowIndex) {
+    return rowIndex === items.length - 1;
   }
 
   // --- GENERACIÓN DE PDF (lazy load para no cargar en dashboard) ---
@@ -166,7 +231,8 @@
         status,
         template,
         cover_image_url: coverImageUrl || null,
-        section_order: sectionOrder
+        section_order: sectionOrder,
+        ...(status === 'sent' ? { sent_at: new Date().toISOString() } : {})
       };
 
       const result = isEditing
@@ -175,7 +241,7 @@
             .update(payload)
             .eq('id', invoiceId)
             .eq('user_id', currentUser.id)
-        : await supabase.from('invoices').insert(payload).select('id').single();
+        : await supabase.from('invoices').insert(payload).select('id, number').single();
 
       if (result.error) throw result.error;
       invoiceStatus = status;
@@ -183,11 +249,14 @@
       if (!isEditing && result.data?.id) {
         invoiceId = result.data.id;
         isEditing = true;
+        invoiceNumber = result.data.number ?? null;
       }
-      setTimeout(() => { saveStatus = ''; }, 2500);
       if (status === 'sent') {
+        readOnly = true;
+        invoiceStatus = 'sent';
         goto('/app/dashboard');
       }
+      setTimeout(() => { saveStatus = ''; }, 2500);
     } catch (err) {
       const error = /** @type {Error} */ (err);
       saveStatus = 'error';
@@ -218,7 +287,7 @@
 
     const { data, error } = await supabase
       .from('invoices')
-      .select('client_name, line_items, tax_rate, template, cover_image_url, section_order, status')
+      .select('client_name, line_items, tax_rate, template, cover_image_url, section_order, status, number')
       .eq('id', id)
       .eq('user_id', currentUser.id)
       .maybeSingle();
@@ -240,6 +309,8 @@
       ? data.section_order
       : ['header', 'client', 'items', 'totals', 'footer'];
     invoiceStatus = (data.status === 'sent' ? 'sent' : 'draft');
+    invoiceNumber = data.number ?? null;
+    readOnly = data.status === 'sent';
   }
 
   /** @param {string} value */
@@ -273,12 +344,24 @@
       </p>
     </div>
     <div class="flex flex-wrap items-center gap-3">
-      {#if saveStatus === 'saving'}
-        <span class="text-sm text-slate-500">Guardando...</span>
-      {:else if saveStatus === 'saved'}
-        <span class="text-sm text-emerald-600">Guardado</span>
-      {:else if saveStatus === 'error'}
-        <span class="text-sm text-red-600">Error al guardar</span>
+      {#if !readOnly}
+        {#if saveStatus === 'saving'}
+          <span class="text-sm text-slate-500">Guardando...</span>
+        {:else if saveStatus === 'saved'}
+          <span class="text-sm text-emerald-600">Guardado</span>
+        {:else if saveStatus === 'error'}
+          <span class="text-sm text-red-600">Error al guardar</span>
+        {/if}
+      {/if}
+      {#if invoiceId}
+        <a
+          href="/invoice/{invoiceId}/print"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:text-slate-900 transition"
+        >
+          Vista impresión
+        </a>
       {/if}
       <button
         onclick={downloadPDF}
@@ -286,30 +369,41 @@
       >
         Descargar PDF
       </button>
-      <button
-        onclick={saveDraft}
-        disabled={saving || !user}
-        class="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 disabled:opacity-50 transition"
-      >
-        {saving ? 'Guardando...' : 'Guardar borrador'}
-      </button>
-      <button
-        onclick={emitInvoice}
-        disabled={saving || !user}
-        class="rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition"
-      >
-        Emitir factura
-      </button>
+      {#if readOnly}
+        <a href="/app/dashboard" class="rounded-full bg-slate-200 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-300 transition">
+          Volver al dashboard
+        </a>
+      {:else}
+        <button
+          onclick={saveDraft}
+          disabled={saving || !user}
+          class="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 disabled:opacity-50 transition"
+        >
+          {saving ? 'Guardando...' : 'Guardar borrador'}
+        </button>
+        <button
+          onclick={emitInvoice}
+          disabled={saving || !user}
+          class="rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition"
+        >
+          Emitir factura
+        </button>
+      {/if}
     </div>
   </div>
 
-  {#if isEditing && invoiceStatus === 'sent'}
+  {#if readOnly}
+    <div class="mb-6 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+      <strong>Factura bloqueada (emitida).</strong> Solo lectura. Puedes descargar el PDF o abrir vista impresión. El número y el estado no se pueden modificar.
+    </div>
+  {:else if isEditing && invoiceStatus === 'sent'}
     <div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
       Estás editando una factura ya emitida. Los cambios pueden afectar a la trazabilidad; usa solo para correcciones puntuales.
     </div>
   {/if}
 
   <div class="grid gap-6 lg:grid-cols-[320px_1fr]">
+    {#if !readOnly}
     <aside class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
       <div>
         <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Plantilla</p>
@@ -371,12 +465,29 @@
         </div>
       </div>
 
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Impuesto</p>
+        <div class="mt-2 flex flex-wrap gap-2">
+          {#each TAX_PRESETS as preset}
+            <button
+              type="button"
+              onclick={() => { taxRate = preset.value; }}
+              class="rounded-lg border px-2 py-1.5 text-xs font-medium {taxRate === preset.value ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}"
+            >
+              {preset.label}
+            </button>
+          {/each}
+        </div>
+        <p class="mt-2 text-xs text-slate-400">IRPF negativo = retención.</p>
+      </div>
+
       <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">
         <p class="font-semibold text-slate-700">Personalización avanzada</p>
         <p class="mt-2">Activa Pro para acceder a más plantillas y branding completo.</p>
         <a href="/pricing" class="mt-3 inline-flex text-xs font-semibold text-blue-600 hover:text-blue-700">Ver plan Pro</a>
       </div>
     </aside>
+    {/if}
 
     <div
       id="invoice-canvas"
@@ -401,7 +512,7 @@
             <div class="flex flex-wrap items-start justify-between gap-6">
               <div>
                 <p class="text-xs uppercase tracking-[0.3em] text-slate-400">Factura</p>
-                <h2 class="mt-2 text-4xl font-semibold text-slate-900">INV-{Math.floor(Math.random() * 1000)}</h2>
+                <h2 class="mt-2 text-4xl font-semibold text-slate-900">INV-{invoiceNumber ?? '—'}</h2>
                 <div class="mt-6 space-y-1 text-sm text-slate-500">
                   {#if profile.business_name}
                     <div class="text-slate-900 font-semibold">{profile.business_name}</div>
@@ -441,7 +552,8 @@
                 id="client-name"
                 bind:value={clientName}
                 placeholder="Nombre del cliente o empresa"
-                class="w-full border-b border-slate-200 pb-3 text-2xl font-semibold text-slate-900 outline-none focus:border-blue-500 transition"
+                disabled={readOnly}
+                class="w-full border-b border-slate-200 pb-3 text-2xl font-semibold text-slate-900 outline-none focus:border-blue-500 transition disabled:bg-transparent disabled:opacity-80"
               />
             </div>
           {/if}
@@ -456,42 +568,53 @@
               </div>
 
               {#each items as item, i}
-                <div class="grid grid-cols-12 items-start gap-4 border-b border-slate-50 py-3 hover:bg-slate-50/60 transition">
+                {@const isLast = i === items.length - 1}
+                <div class="invoice-item-row grid grid-cols-12 items-start gap-4 border-b border-slate-50 py-3 hover:bg-slate-50/60 transition">
                   <div class="col-span-6 space-y-2">
                     <input
                       type="text"
                       bind:value={item.desc}
-                      placeholder="Ej. Consultoría mensual"
-                      class="w-full bg-transparent text-sm font-medium text-slate-700 outline-none"
+                      placeholder="Ej. Consultoría mensual (Enter = nueva línea, Tab = siguiente campo)"
+                      disabled={readOnly}
+                      onkeydown={(e) => { handleItemKeydown(e, i, isLast); handleItemTab(e, i); }}
+                      class="w-full bg-transparent text-sm font-medium text-slate-700 outline-none disabled:opacity-80"
                     />
+                    {#if !readOnly}
                     <input
                       type="url"
                       bind:value={item.imageUrl}
                       placeholder="Imagen opcional (URL)"
+                      onkeydown={(e) => handleItemTab(e, i)}
                       class="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-500"
                     />
+                    {/if}
                     {#if item.imageUrl}
                       <img src={item.imageUrl} alt="Imagen del concepto" class="h-16 w-24 rounded-lg object-cover border border-slate-100" />
                     {/if}
                   </div>
                   <div class="col-span-2 text-right">
-                    <input type="number" bind:value={item.qty} class="w-full bg-transparent text-right text-sm text-slate-700 outline-none" />
+                    <input type="number" bind:value={item.qty} disabled={readOnly} onkeydown={(e) => handleItemTab(e, i)} class="w-full bg-transparent text-right text-sm text-slate-700 outline-none disabled:opacity-80" />
                   </div>
                   <div class="col-span-2 text-right">
-                    <input type="number" bind:value={item.price} class="w-full bg-transparent text-right text-sm text-slate-700 outline-none" />
+                    <input type="number" bind:value={item.price} disabled={readOnly} onkeydown={(e) => handleItemTab(e, i)} class="w-full bg-transparent text-right text-sm text-slate-700 outline-none disabled:opacity-80" />
                   </div>
                   <div class="col-span-1 text-right text-sm font-semibold text-slate-900">
                     {(item.price * item.qty).toFixed(2)}€
                   </div>
-                  <div class="col-span-1 text-right">
-                    <button onclick={() => removeItem(i)} class="text-slate-300 hover:text-red-500 transition">Eliminar</button>
+                  <div class="col-span-1 text-right flex gap-1 justify-end">
+                    {#if !readOnly}
+                      <button type="button" onclick={() => duplicateItem(i)} class="text-slate-400 hover:text-slate-600 text-xs" title="Duplicar línea">Dup</button>
+                      <button type="button" onclick={() => removeItem(i)} class="text-slate-300 hover:text-red-500 transition">Eliminar</button>
+                    {/if}
                   </div>
                 </div>
               {/each}
 
-              <button onclick={addItem} class="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700">
+              {#if !readOnly}
+              <button type="button" onclick={addItem} class="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700">
                 Añadir concepto
               </button>
+              {/if}
             </div>
           {/if}
 
@@ -503,9 +626,9 @@
                   <span class="font-medium text-slate-900">{subtotal().toFixed(2)} €</span>
                 </div>
                 <div class="flex justify-between items-center text-slate-500">
-                  <span>IVA ({taxRate}%)</span>
+                  <span>{taxRate >= 0 ? 'IVA' : 'IRPF'} ({taxRate}%)</span>
                   <div class="flex items-center gap-2">
-                    <input type="number" bind:value={taxRate} class="w-12 border-b border-slate-200 text-right text-sm outline-none" />
+                    <input type="number" bind:value={taxRate} disabled={readOnly} class="w-12 border-b border-slate-200 text-right text-sm outline-none disabled:opacity-80" />
                     <span>%</span>
                   </div>
                 </div>
