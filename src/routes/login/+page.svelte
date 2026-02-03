@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { PUBLIC_SITE_URL } from '$env/static/public';
+  import logo from '$lib/assets/logo.svg';
 
   // Usamos un objeto simple para evitar problemas de reactividad si usas Svelte 5
   let formState = {
@@ -69,9 +70,7 @@
 <div class="min-h-screen bg-slate-50">
   <div class="mx-auto flex min-h-screen max-w-5xl items-center gap-12 px-6 py-16">
     <div class="hidden flex-1 flex-col justify-center gap-6 lg:flex">
-      <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white text-xl font-semibold">
-        F
-      </div>
+      <img src={logo} alt="FacturasGen" class="h-12 w-12" />
       <h1 class="text-4xl font-semibold text-slate-900">Bienvenido a FacturasGen</h1>
       <p class="text-base text-slate-600">
         Accede a tu panel de facturación empresarial con un enlace seguro enviado a tu correo.

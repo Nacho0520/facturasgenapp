@@ -1,10 +1,14 @@
+<script>
+  import logo from '$lib/assets/logo.svg';
+</script>
+
 <div class="min-h-screen bg-slate-50">
   <header class="border-b border-slate-200 bg-white/70 backdrop-blur">
     <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-      <div class="flex items-center gap-2 text-slate-900">
-        <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white font-semibold">F</div>
+      <a href="/" class="flex items-center gap-3 text-slate-900 hover:opacity-90 transition">
+        <img src={logo} alt="FacturasGen" class="h-9 w-9" />
         <span class="text-lg font-semibold">FacturasGen</span>
-      </div>
+      </a>
       <a href="/login" class="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
         Acceder
       </a>

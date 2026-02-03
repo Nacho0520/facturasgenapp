@@ -1,10 +1,15 @@
+<script>
+  import logo from '$lib/assets/logo.svg';
+  import { page } from '$app/stores';
+</script>
+
 <div class="min-h-screen bg-slate-50">
   <header class="border-b border-slate-200 bg-white/70 backdrop-blur">
     <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-      <div class="flex items-center gap-2 text-slate-900">
-        <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white font-semibold">F</div>
+      <a href="/" class="flex items-center gap-3 text-slate-900 hover:opacity-90 transition">
+        <img src={logo} alt="FacturasGen" class="h-9 w-9" />
         <span class="text-lg font-semibold">FacturasGen</span>
-      </div>
+      </a>
       <div class="flex items-center gap-3 text-sm">
         <a href="/login" class="text-slate-600 hover:text-slate-900">Acceder</a>
         <a href="/login" class="rounded-full bg-blue-600 px-4 py-2 text-white font-medium hover:bg-blue-700">
@@ -15,6 +20,19 @@
   </header>
 
   <main class="mx-auto max-w-6xl px-6 py-16">
+    {#if $page.url.searchParams.get('auth') === 'required'}
+      <div class="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+        <span>Para acceder al panel necesitas iniciar sesión. Puedes entrar con tu correo o probar la demo sin cuenta.</span>
+        <div class="flex flex-wrap gap-2">
+          <a href="/login" class="rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700">
+            Iniciar sesión
+          </a>
+          <a href="/demo" class="rounded-full border border-amber-300 px-4 py-2 text-xs font-semibold text-amber-800 hover:border-amber-400">
+            Ver demo
+          </a>
+        </div>
+      </div>
+    {/if}
     <div class="grid items-center gap-12 lg:grid-cols-2">
       <div>
         <p class="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">

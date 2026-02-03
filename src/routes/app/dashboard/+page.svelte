@@ -3,7 +3,10 @@
   import { goto } from '$app/navigation';
   import { supabase } from '$lib/supabase';
 
-  let invoices = $state([]);
+  /** @typedef {{ price: number, qty: number }} LineItem */
+  /** @typedef {{ id: string, number?: number, client_name?: string, created_at?: string, line_items?: LineItem[], tax_rate?: number, status?: string }} Invoice */
+
+  let invoices = $state(/** @type {Invoice[]} */ ([]));
   let loading = $state(true);
   let errorMessage = $state('');
 
@@ -13,12 +16,14 @@
   const draftCount = () =>
     invoices.filter((invoice) => (invoice.status ?? 'draft') === 'draft').length;
 
+  /** @param {string | null | undefined} value */
   const formatDate = (value) => {
     if (!value) return '-';
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString();
   };
 
+  /** @param {Invoice} invoice */
   const calculateTotal = (invoice) => {
     const items = invoice.line_items ?? [];
     const subtotal = items.reduce((sum, item) => sum + (item.price * item.qty), 0);
@@ -29,7 +34,10 @@
   onMount(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Sesión expirada. Inicia sesión de nuevo.');
+      if (!user) {
+        goto('/?auth=required');
+        return;
+      }
 
       const { data, error } = await supabase
         .from('invoices')
@@ -40,7 +48,8 @@
       if (error) throw error;
       invoices = data ?? [];
     } catch (error) {
-      errorMessage = error.message ?? 'Error al cargar las facturas.';
+      const err = /** @type {Error} */ (error);
+      errorMessage = err.message ?? 'Error al cargar las facturas.';
     } finally {
       loading = false;
     }

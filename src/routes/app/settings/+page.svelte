@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { supabase } from '$lib/supabase';
 
   let profile = $state({
@@ -13,10 +14,20 @@
   let saving = $state(false);
   let message = $state('');
 
+  const fieldIds = {
+    businessName: 'business-name',
+    taxId: 'tax-id',
+    address: 'tax-address',
+    logoUrl: 'logo-url'
+  };
+
   const loadProfile = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Sesión expirada. Inicia sesión de nuevo.');
+      if (!user) {
+        goto('/?auth=required');
+        return;
+      }
 
       const { data, error } = await supabase
         .from('profiles')
@@ -34,7 +45,8 @@
         };
       }
     } catch (error) {
-      message = error.message ?? 'No se pudo cargar la configuración.';
+      const err = /** @type {Error} */ (error);
+      message = err.message ?? 'No se pudo cargar la configuración.';
     } finally {
       loading = false;
     }
@@ -46,7 +58,10 @@
       message = '';
 
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Sesión expirada. Inicia sesión de nuevo.');
+      if (!user) {
+        goto('/?auth=required');
+        return;
+      }
 
       const { error } = await supabase.from('profiles').upsert({
         id: user.id,
@@ -59,7 +74,8 @@
       if (error) throw error;
       message = '✅ Datos guardados correctamente.';
     } catch (error) {
-      message = '❌ ' + (error.message ?? 'Error al guardar.');
+      const err = /** @type {Error} */ (error);
+      message = '❌ ' + (err.message ?? 'Error al guardar.');
     } finally {
       saving = false;
     }
@@ -82,9 +98,10 @@
     <div class="grid gap-6 lg:grid-cols-[2fr_1fr]">
       <form class="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm space-y-6" onsubmit={(event) => { event.preventDefault(); saveProfile(); }}>
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-2">Nombre del negocio</label>
+        <label class="block text-sm font-medium text-slate-700 mb-2" for={fieldIds.businessName}>Nombre del negocio</label>
           <input
             type="text"
+          id={fieldIds.businessName}
             bind:value={profile.business_name}
             placeholder="Tu empresa o nombre fiscal"
             class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition"
@@ -92,9 +109,10 @@
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-2">NIF/CIF</label>
+        <label class="block text-sm font-medium text-slate-700 mb-2" for={fieldIds.taxId}>NIF/CIF</label>
           <input
             type="text"
+          id={fieldIds.taxId}
             bind:value={profile.tax_id}
             placeholder="B12345678"
             class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition"
@@ -102,9 +120,10 @@
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-2">Dirección fiscal</label>
+        <label class="block text-sm font-medium text-slate-700 mb-2" for={fieldIds.address}>Dirección fiscal</label>
           <textarea
             rows="4"
+          id={fieldIds.address}
             bind:value={profile.address}
             placeholder="Calle, número, ciudad, país"
             class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition"
@@ -112,9 +131,10 @@
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-2">Logo (URL)</label>
+        <label class="block text-sm font-medium text-slate-700 mb-2" for={fieldIds.logoUrl}>Logo (URL)</label>
           <input
             type="url"
+          id={fieldIds.logoUrl}
             bind:value={profile.logo_url}
             placeholder="https://"
             class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition"

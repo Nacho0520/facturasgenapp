@@ -3,17 +3,19 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
+  import logo from '$lib/assets/logo.svg';
 
   let checkingSession = true;
   let userEmail = '';
 
   onMount(() => {
-    let subscription;
+    /** @type {{ unsubscribe: () => void } | null} */
+    let subscription = null;
 
     const initSession = async () => {
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
-        goto('/login');
+        goto('/?auth=required');
         return;
       }
 
@@ -22,7 +24,7 @@
 
       const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
         if (!session) {
-          goto('/login');
+          goto('/?auth=required');
           return;
         }
         userEmail = session.user.email ?? '';
@@ -41,7 +43,7 @@
   // Función para cerrar sesión
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    goto('/login'); // Nos manda al login al terminar
+    goto('/'); // Redirigir a la página principal al cerrar sesión
   };
 </script>
 
@@ -53,15 +55,15 @@
   <div class="flex min-h-screen bg-slate-50">
     <aside class="w-72 bg-slate-900 text-slate-200 flex flex-col">
       <div class="px-6 py-6 border-b border-slate-800">
-        <div class="flex items-center gap-3">
-          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white font-semibold">F</div>
+        <a href="/" class="flex items-center gap-3 text-white hover:opacity-90 transition">
+          <img src={logo} alt="FacturasGen" class="h-10 w-10" />
           <div>
             <h1 class="text-lg font-semibold text-white">FacturasGen</h1>
             {#if userEmail}
               <p class="text-xs text-slate-400 truncate max-w-[180px]">{userEmail}</p>
             {/if}
           </div>
-        </div>
+        </a>
       </div>
 
       <nav class="flex-1 px-4 py-6 space-y-1">

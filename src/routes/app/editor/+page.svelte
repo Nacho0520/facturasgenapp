@@ -7,9 +7,11 @@
   import { get } from 'svelte/store';
 
   // --- ESTADOS (Svelte 5) ---
+  /** @typedef {{ desc: string, price: number, qty: number, imageUrl?: string }} LineItem */
+
   let clientName = $state("");
   let taxRate = $state(21);
-  let invoiceId = $state(null);
+  let invoiceId = $state(/** @type {string | null} */ (null));
   let isEditing = $state(false);
   let template = $state('classic');
   let coverImageUrl = $state('');
@@ -21,13 +23,13 @@
     logo_url: ""
   });
   let showWatermark = $state(true);
-  let items = $state([
+  let items = $state(/** @type {LineItem[]} */ ([
     { desc: "", price: 0, qty: 1, imageUrl: "" }
-  ]);
-  let sectionOrder = $state(['header', 'client', 'items', 'totals', 'footer']);
+  ]));
+  let sectionOrder = $state(/** @type {string[]} */ (['header', 'client', 'items', 'totals', 'footer']));
   
   let saving = $state(false);
-  let user = $state(null);
+  let user = $state(/** @type {import('@supabase/supabase-js').User | null} */ (null));
 
   // --- CÁLCULOS REACTIVOS ---
   const subtotal = () => items.reduce((sum, item) => sum + (item.price * item.qty), 0);
@@ -52,22 +54,24 @@
   onMount(async () => {
     const { data } = await supabase.auth.getUser();
     user = data.user;
+    if (!user) {
+      goto('/?auth=required');
+      return;
+    }
 
-    if (user) {
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('business_name, tax_id, address, logo_url')
-        .eq('id', user.id)
-        .maybeSingle();
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('business_name, tax_id, address, logo_url')
+      .eq('id', user.id)
+      .maybeSingle();
 
-      if (profileData) {
-        profile = {
-          business_name: profileData.business_name ?? "",
-          tax_id: profileData.tax_id ?? "",
-          address: profileData.address ?? "",
-          logo_url: profileData.logo_url ?? ""
-        };
-      }
+    if (profileData) {
+      profile = {
+        business_name: profileData.business_name ?? "",
+        tax_id: profileData.tax_id ?? "",
+        address: profileData.address ?? "",
+        logo_url: profileData.logo_url ?? ""
+      };
     }
 
     if (typeof localStorage !== 'undefined') {
@@ -86,9 +90,10 @@
 
   // --- FUNCIONES DE LA TABLA ---
   function addItem() {
-    items.push({ desc: "", price: 0, qty: 1 });
+    items.push({ desc: "", price: 0, qty: 1, imageUrl: "" });
   }
 
+  /** @param {number} index */
   function removeItem(index) {
     items = items.filter((_, i) => i !== index);
   }
@@ -96,12 +101,23 @@
   // --- GENERACIÓN DE PDF ---
   function downloadPDF() {
     const element = document.getElementById('invoice-canvas');
+    if (!element) return;
+    /** @type {[number, number, number, number]} */
+    const margin = [0.5, 0.5, 0.5, 0.5];
+    /** @type {'jpeg'} */
+    const imageType = 'jpeg';
+    /** @type {'portrait'} */
+    const orientation = 'portrait';
+    /** @type {'letter'} */
+    const format = 'letter';
+    /** @type {'in'} */
+    const unit = 'in';
     const opt = {
-      margin:       [0.5, 0.5],
+      margin,
       filename:     `Factura_${clientName.replace(/\s+/g, '_') || 'SaaS'}.pdf`,
-      image:        { type: 'jpeg', quality: 0.98 },
+      image:        { type: imageType, quality: 0.98 },
       html2canvas:  { scale: 2, useCORS: true },
-      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+      jsPDF:        { unit, format, orientation }
     };
 
     html2pdf().set(opt).from(element).save();
@@ -114,8 +130,11 @@
     try {
       saving = true;
       const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
-      if (!currentUser) throw new Error("Sesión expirada. Inicia sesión de nuevo.");
+
+      if (!currentUser) {
+        goto('/?auth=required');
+        return;
+      }
 
       const payload = {
         user_id: currentUser.id,
@@ -140,15 +159,20 @@
       alert(isEditing ? "¡Factura actualizada correctamente!" : "¡Factura guardada correctamente!");
       goto('/app/dashboard');
     } catch (err) {
-      alert("Error: " + err.message);
+      const error = /** @type {Error} */ (err);
+      alert("Error: " + error.message);
     } finally {
       saving = false;
     }
   }
 
+  /** @param {string} id */
   async function loadInvoice(id) {
     const { data: { user: currentUser } } = await supabase.auth.getUser();
-    if (!currentUser) return;
+    if (!currentUser) {
+      goto('/?auth=required');
+      return;
+    }
 
     const { data, error } = await supabase
       .from('invoices')
@@ -175,6 +199,7 @@
       : ['header', 'client', 'items', 'totals', 'footer'];
   }
 
+  /** @param {string} value */
   function handleTemplateChange(value) {
     const selected = templates.find((item) => item.id === value);
     if (selected?.proOnly && !isPro) {
@@ -185,6 +210,7 @@
     template = value;
   }
 
+  /** @param {number} index @param {number} direction */
   function moveSection(index, direction) {
     const nextIndex = index + direction;
     if (nextIndex < 0 || nextIndex >= sectionOrder.length) return;
@@ -347,9 +373,10 @@
 
           {#if section === 'client'}
             <div>
-              <label class="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 mb-3">Cliente</label>
+              <label class="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-400 mb-3" for="client-name">Cliente</label>
               <input
                 type="text"
+                id="client-name"
                 bind:value={clientName}
                 placeholder="Nombre del cliente o empresa"
                 class="w-full border-b border-slate-200 pb-3 text-2xl font-semibold text-slate-900 outline-none focus:border-blue-500 transition"
